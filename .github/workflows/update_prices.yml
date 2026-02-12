@@ -1,0 +1,51 @@
+name: Update fund prices (Portfolio Performance)
+
+on:
+  schedule:
+    - cron: "*/19 * * * *"   # UTC
+  workflow_dispatch: {}
+
+concurrency:
+  group: fund-prices
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run updater
+        env:
+          LOG_LEVEL: DEBUG
+          TZ: UTC
+        run: |
+          python src/app.py
+
+      - name: Commit & push if changed
+        run: |
+          git config user.name "Fund Prices Bot"
+          git config user.email "actions@github.com"
+          git add data/prices data/funds_metadata.json .github/keepalive/last_keepalive_utc.txt || true
+          if git diff --cached --quiet; then
+            echo "Sin cambios: no se hace commit."
+          else
+            git commit -m "chore: update fund prices"
+            git push
+          fi
