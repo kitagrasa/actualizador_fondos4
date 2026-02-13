@@ -2,8 +2,21 @@ name: Actualizador Precios Fondos
 
 on:
   schedule:
-    - cron: "2,21,40,59 * * * *"
-  workflow_dispatch: {}
+    - cron: "*/19 * * * *"   # UTC
+  workflow_dispatch:
+    inputs:
+      log_level:
+        description: "Nivel de logs (INFO/DEBUG)"
+        required: true
+        default: "INFO"
+      full_refresh:
+        description: "Backfill completo desde inception (1 = sí)"
+        required: true
+        default: "0"
+      ft_log_rows:
+        description: "Log fila a fila de FT (1 = sí)"
+        required: true
+        default: "0"
 
 concurrency:
   group: fund-prices
@@ -33,7 +46,10 @@ jobs:
 
       - name: Run updater
         env:
-          LOG_LEVEL: DEBUG
+          LOG_LEVEL: ${{ inputs.log_level || 'INFO' }}
+          FULL_REFRESH: ${{ inputs.full_refresh || '0' }}
+          FT_LOG_ROWS: ${{ inputs.ft_log_rows || '0' }}
+          FT_LOOKBACK_DAYS: "14"
           TZ: UTC
           PYTHONUNBUFFERED: "1"
         run: |
