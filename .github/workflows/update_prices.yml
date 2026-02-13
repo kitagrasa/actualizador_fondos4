@@ -2,7 +2,7 @@ name: Actualizador Precios Fondos
 
 on:
   schedule:
-    - cron: "*/15 * * * *"   # UTC, 4 veces/hora
+    - cron: "*/14 * * * *"   # UTC, 4 veces/hora
   workflow_dispatch: {}
 
 concurrency:
