@@ -3,7 +3,9 @@ from __future__ import annotations
 import html as ihtml
 import json
 import logging
+import os
 import re
+import time
 from datetime import date, datetime, timedelta
 from typing import Dict, List, Optional, Tuple
 
@@ -15,23 +17,16 @@ log = logging.getLogger("scrapers.ft_scraper")
 
 
 def _symbol_variants(ft_symbol: str) -> List[str]:
-    """
-    FT a veces acepta "ISIN:EUR" y otras termina redirigiendo/buscando.
-    Probamos variantes para maximizar tasa de éxito.
-    """
     sym = (ft_symbol or "").strip()
     if not sym:
         return []
-
     variants = [sym]
-
     if ":" in sym:
         variants.append(sym.replace(":", ""))
     else:
         m = re.match(r"^(.+?)([A-Z]{3})$", sym)
         if m:
             variants.append(f"{m.group(1)}:{m.group(2)}")
-
     out, seen = [], set()
     for v in variants:
         if v not in seen:
@@ -62,13 +57,9 @@ def _extract_tearsheet_metadata(soup: BeautifulSoup, sym_used: str, url: str) ->
 
 
 def _extract_historical_app_config(soup: BeautifulSoup) -> Optional[Dict]:
-    """
-    Busca el módulo HistoricalPricesApp que incluye data-mod-config con JSON
-    (en el HTML fuente aparece con &quot; escapado) [file:42].
-    """
+    # En FT suele existir HistoricalPricesApp con data-mod-config escapado en HTML [file:42]
     app = soup.select_one('div[data-module-name="HistoricalPricesApp"][data-mod-config]')
     if not app:
-        # Fallback por si cambia el selector, pero existe el contenedor del app-id:
         container = soup.select_one('div[data-f2-app-id="mod-tearsheet-historical-prices"]')
         if container:
             app = container.select_one('div[data-mod-config]')
@@ -79,18 +70,20 @@ def _extract_historical_app_config(soup: BeautifulSoup) -> Optional[Dict]:
     if not raw:
         return None
 
-    # data-mod-config suele venir con entidades HTML (&quot;)
     raw_unescaped = ihtml.unescape(raw).strip()
     try:
         cfg = json.loads(raw_unescaped)
-        if isinstance(cfg, dict):
-            return cfg
+        return cfg if isinstance(cfg, dict) else None
     except Exception:
         return None
-    return None
 
 
-def _date_chunks(start: date, end: date, chunk_days: int = 365) -> List[Tuple[date, date]]:
+def _to_ft_date_param(d: date) -> str:
+    # Formato que FT suele aceptar en el AJAX: YYYY/MM/DD [web:48]
+    return d.strftime("%Y/%m/%d")
+
+
+def _date_chunks(start: date, end: date, chunk_days: int) -> List[Tuple[date, date]]:
     chunks = []
     cur = start
     while cur <= end:
@@ -100,173 +93,165 @@ def _date_chunks(start: date, end: date, chunk_days: int = 365) -> List[Tuple[da
     return chunks
 
 
-def _try_ajax_endpoints(
-    session,
-    symbol_numeric: str,
-    start: date,
-    end: date,
-) -> Optional[str]:
-    """
-    Devuelve el campo 'html' del JSON, si existe.
+def _looks_like_full_html_document(text: str) -> bool:
+    t = (text or "").lstrip().lower()
+    return t.startswith("<!doctype html") or t.startswith("<html")
 
-    Hay precedentes de endpoints tipo:
-    /data/equities/ajax/get-historical-prices?startDate=...&endDate=...&symbol=...
-    que devuelven JSON con una clave 'html' para parsear [web:48].
-    """
-    endpoints = [
-        "https://markets.ft.com/data/funds/ajax/get-historical-prices",
-        "https://markets.ft.com/data/equities/ajax/get-historical-prices",
-    ]
 
+def _fetch_ajax_html(session, symbol_numeric: str, start: date, end: date) -> Optional[str]:
+    """
+    Endpoint AJAX público/observado para obtener histórico: devuelve JSON con una clave 'html'. [web:48]
+    """
+    url = "https://markets.ft.com/data/equities/ajax/get-historical-prices"
     params = {
-        "startDate": start.isoformat(),
-        "endDate": end.isoformat(),
+        "startDate": _to_ft_date_param(start),
+        "endDate": _to_ft_date_param(end),
         "symbol": str(symbol_numeric),
     }
-
     headers = {
         "Accept": "application/json, text/javascript, */*; q=0.01",
         "X-Requested-With": "XMLHttpRequest",
         "Referer": "https://markets.ft.com/",
     }
 
-    for ep in endpoints:
-        try:
-            r = session.get(ep, params=params, headers=headers, timeout=25)
-            log.debug(
-                "FT AJAX: GET %s params=%s status=%s",
-                ep,
-                params,
-                r.status_code,
-            )
-            if r.status_code != 200:
-                continue
-            try:
-                payload = r.json()
-            except Exception as e:
-                sample = re.sub(r"\s+", " ", (r.text or "")[:400])
-                log.debug("FT AJAX: JSON inválido (%s). Sample=%r", e, sample)
-                continue
+    r = session.get(url, params=params, headers=headers, timeout=25)
+    log.debug("FT AJAX: GET %s params=%s status=%s", url, params, r.status_code)
 
-            if isinstance(payload, dict) and "html" in payload and payload["html"]:
-                return payload["html"]
+    if r.status_code != 200:
+        return None
 
-        except Exception as e:
-            log.error("FT AJAX error ep=%s: %s", ep, e, exc_info=True)
+    # Si te devuelven HTML completo en vez de JSON, es típico de bloqueo/antibot.
+    if _looks_like_full_html_document(r.text):
+        sample = re.sub(r"\s+", " ", (r.text or "")[:250])
+        log.warning("FT AJAX: Respuesta HTML (posible bloqueo). Sample=%r", sample)
+        return None
+
+    try:
+        payload = r.json()
+    except Exception as e:
+        sample = re.sub(r"\s+", " ", (r.text or "")[:250])
+        log.warning("FT AJAX: JSON inválido (%s). Sample=%r", e, sample)
+        return None
+
+    if isinstance(payload, dict) and payload.get("html"):
+        return payload["html"]
 
     return None
 
 
 def _parse_prices_html_fragment(html_fragment: str) -> List[Tuple[str, float]]:
-    """
-    El endpoint AJAX suele devolver 'html' con filas/tabla. Lo envolvemos en <table>.
-    """
     soup = BeautifulSoup(f"<table>{html_fragment}</table>", "lxml")
     out: List[Tuple[str, float]] = []
 
+    log_rows = os.getenv("FT_LOG_ROWS", "0").strip() == "1"
+
     for i, tr in enumerate(soup.select("tr"), start=1):
         tds = tr.find_all("td")
-        if len(tds) < 2:
+        if len(tds) < 5:
             continue
 
-        # Formato típico: Date, Open, High, Low, Close, Volume (Close suele ser índice 4) [web:48]
         date_raw = tds[0].get_text(" ", strip=True)
-        close_raw = ""
-        if len(tds) >= 5:
-            close_raw = tds[4].get_text(" ", strip=True)
-        else:
-            # fallback: última columna numérica
-            close_raw = tds[-1].get_text(" ", strip=True)
+        close_raw = tds[4].get_text(" ", strip=True)
 
-        log.debug("FT AJAX: Fila %s - Fecha raw: %r, Close raw: %r", i, date_raw, close_raw)
+        if log_rows:
+            log.debug("FT AJAX: Fila %s - Fecha raw: %r, Close raw: %r", i, date_raw, close_raw)
 
         try:
             d = parse_ft_date(date_raw)
             c = parse_float(close_raw)
             out.append((d, c))
         except Exception as e:
-            log.debug("FT AJAX: No se pudo parsear fila %s (%s)", i, e)
+            if log_rows:
+                log.debug("FT AJAX: No se pudo parsear fila %s (%s)", i, e)
 
     return out
 
 
-def scrape_ft_prices_and_metadata(session, ft_symbol: str) -> Tuple[List[Tuple[str, float]], Dict]:
+def scrape_ft_prices_and_metadata(
+    session,
+    ft_symbol: str,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    full_refresh: bool = False,
+) -> Tuple[List[Tuple[str, float]], Dict]:
     """
-    Estrategia robusta:
-    1) Descargar tearsheet HTML.
-    2) Extraer data-mod-config (symbol numérico + inception) del HistoricalPricesApp [file:42].
-    3) Llamar al endpoint AJAX get-historical-prices por rangos y parsear el HTML del JSON [web:48].
+    - full_refresh=True: backfill completo (troceado por años).
+    - full_refresh=False: incremental (un rango único start_date..end_date).
     """
     meta: Dict = {"ft_symbol_requested": ft_symbol}
+
     symbols_to_try = _symbol_variants(ft_symbol)
+    if not symbols_to_try:
+        return [], meta
+
+    end = end_date or date.today()
 
     for sym in symbols_to_try:
-        url = f"https://markets.ft.com/data/funds/tearsheet/historical?s={sym}"
-        meta["url"] = url
+        tearsheet_url = f"https://markets.ft.com/data/funds/tearsheet/historical?s={sym}"
+        meta["url"] = tearsheet_url
         meta["ft_symbol_used"] = sym
 
         try:
-            r = session.get(url, timeout=25)
+            r = session.get(tearsheet_url, timeout=25)
             meta["status_code"] = r.status_code
-            meta["final_url"] = str(getattr(r, "url", url))
-
-            log.debug("FT: GET %s status=%s final_url=%s", url, r.status_code, meta["final_url"])
+            meta["final_url"] = str(getattr(r, "url", tearsheet_url))
+            log.debug("FT: GET %s status=%s final_url=%s", tearsheet_url, r.status_code, meta["final_url"])
 
             if r.status_code != 200:
                 continue
 
-            html_text = r.text or ""
-            soup = BeautifulSoup(html_text, "lxml")
-
-            meta.update(_extract_tearsheet_metadata(soup, sym, url))
+            soup = BeautifulSoup(r.text or "", "lxml")
+            meta.update(_extract_tearsheet_metadata(soup, sym, tearsheet_url))
 
             cfg = _extract_historical_app_config(soup)
             if not cfg:
-                sample = re.sub(r"\s+", " ", html_text[:700])
-                log.debug("FT: No se encontró data-mod-config del HistoricalPricesApp. Sample=%r", sample)
+                log.warning("FT: No se encontró HistoricalPricesApp/data-mod-config (DOM cambió o bloqueo).")
                 continue
 
             symbol_numeric = str(cfg.get("symbol", "")).strip()
             inception_raw = str(cfg.get("inception", "")).strip()
-
             if not symbol_numeric:
-                log.debug("FT: data-mod-config sin 'symbol': %s", cfg)
+                log.warning("FT: data-mod-config sin 'symbol': %s", cfg)
                 continue
 
-            inception_dt = None
+            inception_dt: Optional[date] = None
             if inception_raw:
                 try:
-                    # Ejemplo: 2013-10-29T00:00:00Z [file:42]
                     inception_dt = datetime.fromisoformat(inception_raw.replace("Z", "+00:00")).date()
                 except Exception:
                     inception_dt = None
-
-            start_date = inception_dt or (date.today() - timedelta(days=365 * 8))
-            end_date = date.today()
 
             meta["symbol_numeric"] = symbol_numeric
             if inception_dt:
                 meta["inception_date"] = inception_dt.isoformat()
 
-            # Pedimos en chunks de 1 año para estabilidad/performance.
-            collected: Dict[str, float] = {}
+            # Rango
+            if full_refresh:
+                start = inception_dt or (date.today() - timedelta(days=365 * 8))
+                chunks = _date_chunks(start, end, chunk_days=365)
+            else:
+                start = start_date or (end - timedelta(days=45))
+                chunks = [(start, end)]
 
-            for (s, e) in _date_chunks(start_date, end_date, chunk_days=365):
-                frag = _try_ajax_endpoints(session, symbol_numeric, s, e)
+            collected: Dict[str, float] = {}
+            for (s, e) in chunks:
+                frag = _fetch_ajax_html(session, symbol_numeric, s, e)
                 if not frag:
-                    log.debug("FT AJAX: Sin html para rango %s..%s (symbol=%s)", s, e, symbol_numeric)
                     continue
 
                 rows = _parse_prices_html_fragment(frag)
                 for d, c in rows:
-                    collected[d] = c  # upsert por fecha
+                    collected[d] = c
 
-            out = sorted(collected.items(), key=lambda x: x[0], reverse=False)
-            if out:
-                log.debug("FT: Total precios parseados=%s para %s (symbol=%s)", len(out), sym, symbol_numeric)
-                return out, meta
+                if full_refresh:
+                    time.sleep(0.25)
 
-            log.debug("FT: 0 precios tras AJAX para %s (symbol=%s). cfg=%s", sym, symbol_numeric, cfg)
+            if collected:
+                prices = sorted(collected.items(), key=lambda x: x[0])  # ascendente
+                log.debug("FT: precios recibidos=%s (full_refresh=%s)", len(prices), full_refresh)
+                return prices, meta
+
+            log.warning("FT: 0 precios (symbol=%s). Puede ser bloqueo, o endpoint cambió.", symbol_numeric)
 
         except Exception as e:
             log.error("FT error symbol=%s: %s", sym, e, exc_info=True)
