@@ -1,5 +1,10 @@
 {
   "funds": {
+    "LU0171306680": {
+      "currency": "EUR",
+      "ft_symbol": "LU0171306680:EUR",
+      "fundsquare_idInstr": "6401"
+    },
     "LU0223332320": {
       "currency": "EUR",
       "ft_symbol": "LU0223332320:EUR",
