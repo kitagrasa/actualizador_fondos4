@@ -2,20 +2,16 @@ name: Actualizador Precios Fondos
 
 on:
   schedule:
-    - cron: "*/19 * * * *"   # UTC
+    - cron: "0 0 * * *"   # 1 vez/día a medianoche UTC (fallback)
   workflow_dispatch:
     inputs:
       log_level:
-        description: "Nivel de logs (INFO/DEBUG)"
-        required: true
+        description: "Nivel de logs"
+        required: false
         default: "INFO"
       full_refresh:
-        description: "Backfill completo desde inception (1 = sí)"
-        required: true
-        default: "0"
-      ft_log_rows:
-        description: "Log fila a fila de FT (1 = sí)"
-        required: true
+        description: "Backfill completo (1=si)"
+        required: false
         default: "0"
 
 concurrency:
@@ -48,12 +44,9 @@ jobs:
         env:
           LOG_LEVEL: ${{ inputs.log_level || 'INFO' }}
           FULL_REFRESH: ${{ inputs.full_refresh || '0' }}
-          FT_LOG_ROWS: ${{ inputs.ft_log_rows || '0' }}
-          FT_LOOKBACK_DAYS: "14"
           TZ: UTC
           PYTHONUNBUFFERED: "1"
-        run: |
-          python -m src.app
+        run: python -m src.app
 
       - name: Commit & push if changed
         run: |
