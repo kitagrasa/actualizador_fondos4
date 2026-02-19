@@ -1,5 +1,11 @@
 {
   "funds": {
+    "FR0010930644": {
+      "currency": "EUR",
+      "ft_symbol": "AMEE:GER",
+      "fundsquare_idInstr": "",
+      "name": "Amundi Global Hydrogen UCITS ETF - Acc"
+    },
     "LU0171306680": {
       "currency": "EUR",
       "ft_symbol": "LU0171306680",
