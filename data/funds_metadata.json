@@ -1,10 +1,5 @@
 {
   "funds": {
-    "FR0010930644": {
-      "currency": "EUR",
-      "ft_symbol": "FR0010930644:EUR",
-      "fundsquare_idInstr": "AMEE:GER"
-    },
     "LU0171306680": {
       "currency": "EUR",
       "ft_symbol": "LU0171306680:EUR",
