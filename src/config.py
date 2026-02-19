@@ -9,8 +9,8 @@ from typing import List
 @dataclass(frozen=True)
 class FundConfig:
     isin: str
-    id_instr: str
-    ft_symbol: str  # Lo que escribe el usuario: "LU0563745743", "AMEE:GER", "AMEE:GER:EUR", etc.
+    id_instr: str      # Puede estar vacío → se salta Fundsquare, solo FT
+    ft_symbol: str     # Lo que escribe el usuario: "LU0563745743", "AMEE:GER", etc.
 
 
 def load_funds_csv(path: str | Path) -> List[FundConfig]:
@@ -21,16 +21,15 @@ def load_funds_csv(path: str | Path) -> List[FundConfig]:
     funds: List[FundConfig] = []
     with path.open("r", encoding="utf-8", newline="") as f:
         reader = csv.DictReader(f)
-        if reader.fieldnames is None or not {"isin", "idInstr"}.issubset(set(reader.fieldnames)):
-            raise ValueError(f"{path} debe tener cabeceras: isin,idInstr,ft_symbol")
+        if reader.fieldnames is None or "isin" not in reader.fieldnames:
+            raise ValueError(f"{path} debe tener al menos la cabecera 'isin'")
 
         for row in reader:
-            isin = (row.get("isin") or "").strip()
-            id_instr = (row.get("idInstr") or "").strip()
-            # ft_symbol: lo que escribe el usuario (puede estar vacío → se usará el ISIN)
+            isin     = (row.get("isin")      or "").strip()
+            id_instr = (row.get("idInstr")   or "").strip()   # opcional
             ft_symbol = (row.get("ft_symbol") or "").strip() or isin
 
-            if not isin or not id_instr:
+            if not isin:          # solo isin es obligatorio
                 continue
 
             funds.append(FundConfig(isin=isin, id_instr=id_instr, ft_symbol=ft_symbol))
