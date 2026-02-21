@@ -51,7 +51,7 @@
     "LU1598719752": {
       "currency": "EUR",
       "ft_symbol": "LU1598719752",
-      "ft_url": "https://markets.ft.com/data/funds/tearsheet/summary?s=LU1598719752:EUR",
+      "ft_url": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU1598719752:EUR",
       "fundsquare_idInstr": "268050",
       "fundsquare_url": "https://www.fundsquare.net/security/histo-prices?idInstr=268050",
       "investing_url": "https://es.investing.com/funds/lu1598719752-historical-data",
