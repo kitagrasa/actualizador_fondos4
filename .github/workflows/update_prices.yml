@@ -1,18 +1,11 @@
+# .github/workflows/update-prices.yml
+
 name: Actualizador Precios Fondos
 
 on:
   schedule:
-    - cron: "2,21,40,59 * * * *"
-  workflow_dispatch:
-    inputs:
-      log_level:
-        description: "Nivel de log: DEBUG o INFO"
-        required: false
-        default: "DEBUG"
-      full_refresh:
-        description: "Backfill completo: 1=si, 0=no"
-        required: false
-        default: "0"
+    - cron: "0 18 * * *"   # 1 vez al día · 18:00 UTC = 20:00 CET
+  workflow_dispatch:         # disparo manual sin opciones extra
 
 concurrency:
   group: fund-prices
@@ -25,7 +18,6 @@ jobs:
   update:
     runs-on: ubuntu-latest
     timeout-minutes: 6
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -40,24 +32,18 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Set env vars
-        run: |
-          RAW_LOG="${{ github.event.inputs.log_level }}"
-          RAW_FULL="${{ github.event.inputs.full_refresh }}"
-          echo "LOGLEVEL=${RAW_LOG:-DEBUG}" >> $GITHUB_ENV
-          echo "FULLREFRESH=${RAW_FULL:-0}" >> $GITHUB_ENV
-
       - name: Run updater
         env:
+          LOGLEVEL: INFO
           TZ: UTC
           PYTHONUNBUFFERED: "1"
         run: python -m src.app
 
-      - name: Commit y push si hay cambios
+      - name: Commit & push if changed
         run: |
           git config user.name "Fund Prices Bot"
           git config user.email "actions@github.com"
-          git add data/prices data/funds-metadata.json || true
+          git add data/prices data/fundsmetadata.json || true
           if git diff --cached --quiet; then
             echo "Sin cambios, no se hace commit."
           else
