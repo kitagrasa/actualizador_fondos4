@@ -6,18 +6,30 @@ from urllib3.util.retry import Retry
 
 
 def build_session() -> requests.Session:
+    """
+    Sesión HTTP compartida con:
+      - Pool de conexiones
+      - Retries para GET y POST (importante para Investing HistoricalDataAjax)
+      - Cabeceras "browser-like" genéricas
+    """
     s = requests.Session()
+
     retries = Retry(
         total=3,
+        connect=3,
+        read=3,
         backoff_factor=0.8,
         status_forcelist=(429, 500, 502, 503, 504),
-        allowed_methods=("GET", "POST"),   # ← añadido POST
+        allowed_methods=("GET", "POST"),
         raise_on_status=False,
     )
+
     adapter = HTTPAdapter(max_retries=retries, pool_connections=10, pool_maxsize=10)
     s.mount("http://", adapter)
     s.mount("https://", adapter)
 
+    # Cabeceras globales genéricas.
+    # Nota: los scrapers pueden/ deben sobrescribir Referer/Origin por request según el dominio.
     s.headers.update(
         {
             "User-Agent": (
@@ -27,7 +39,7 @@ def build_session() -> requests.Session:
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
             "Connection": "keep-alive",
-            "Referer": "https://markets.ft.com/",
         }
     )
+
     return s
