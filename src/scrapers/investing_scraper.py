@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import random
 import re
@@ -17,26 +18,9 @@ _UA = (
     "(KHTML, like Gecko) Chrome/122.0 Safari/537.36"
 )
 
-# ── Regex para extraer pair_id / instrument_id ─────────────────────────────
-# Patrón 1: window.histDataExcessInfo = {pairId: 1036800, ...}   [file:268]
-_RE_HISTDATA = re.compile(
-    r'histDataExcessInfo\s*=\s*\{[^}]*?pairId\s*:\s*(?P<id>\d+)',
-    re.IGNORECASE | re.DOTALL,
-)
+# ── Regex extracción symbol ──────────────────────────────────────────────────
 
-# Patrón 2: dataLayer.push({instrument_id: 1036800})  [file:268]
-_RE_INSTRUMENT_ID = re.compile(
-    r'instrument[_-]?id["\']?\s*:\s*["\']?(?P<id>\d+)',
-    re.IGNORECASE,
-)
-
-# Patrón 3: var allKeyValue = {..., "pair_id":"1036800", ...}  o  pairid:1036800  [file:268]
-_RE_ALLKV_PAIRID = re.compile(
-    r'"?pair_?id"?\s*:\s*"?(?P<id>\d+)"?',
-    re.IGNORECASE,
-)
-
-# Patrón 4: Ruta TVC expuesta en JS (no siempre presente)
+# 1) Ruta TVC expuesta en JS (no siempre presente)
 _RE_TVC_PATH = re.compile(
     r"/(?P<hash>[a-f0-9]{32})/"
     r"(?P<ts>\d{9,11})/"
@@ -48,9 +32,187 @@ _RE_TVC_PATH = re.compile(
     re.IGNORECASE,
 )
 
-# Patrón 5: data-pair-id="1036800" en DOM (genérico, último recurso)
+# 2) window.histDataExcessInfo = {pairId: 1036800, ...}
+_RE_HISTDATA = re.compile(
+    r'histDataExcessInfo\s*=\s*\{[^}]*?pairId\s*:\s*(?P<id>\d+)',
+    re.IGNORECASE | re.DOTALL,
+)
+
+# 3) instrument_id en dataLayer / __NEXT_DATA__
+_RE_INSTRUMENT_ID = re.compile(
+    r'instrument[_-]?id["\']?\s*:\s*["\']?(?P<id>\d+)',
+    re.IGNORECASE,
+)
+
+# 4) pair_id / pairid en allKeyValue u objeto JS
+_RE_ALLKV_PAIRID = re.compile(
+    r'"?pair_?id"?\s*:\s*"?(?P<id>\d+)"?',
+    re.IGNORECASE,
+)
+
+# 5) data-pair-id="..." en DOM
 _RE_DATA_PAIR_ID = re.compile(r'\bdata-pair-id\s*=\s*"?(?P<id>\d+)"?', re.IGNORECASE)
 
+
+# ── Fetch HTML (curl_cffi → requests fallback) ───────────────────────────────
+
+def _fetch_html_curl(url: str) -> Optional[str]:
+    """
+    Usa curl_cffi impersonando Chrome para bypassear Cloudflare.
+    curl_cffi replica el TLS/JA3 fingerprint de un browser real.
+    """
+    try:
+        from curl_cffi.requests import Session as CurlSession  # type: ignore
+        with CurlSession(impersonate="chrome120") as s:
+            r = s.get(
+                url,
+                headers={
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                    "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
+                    "Referer": "https://es.investing.com/",
+                },
+                timeout=30,
+            )
+            if r.status_code != 200:
+                log.warning("Investing curl_cffi: status=%s url=%s", r.status_code, url)
+                return None
+            html = r.text or ""
+            log.debug("Investing: HTML vía curl_cffi (%s chars)", len(html))
+            return html
+    except ImportError:
+        log.debug("Investing: curl_cffi no instalado, usando requests")
+        return None
+    except Exception as e:
+        log.debug("Investing: curl_cffi error: %s", e)
+        return None
+
+
+def _fetch_html_requests(session, url: str) -> Optional[str]:
+    """Fallback con requests normal."""
+    domain = urlparse(url).netloc or "www.investing.com"
+    headers = {
+        "User-Agent": _UA,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Referer": f"https://{domain}/",
+        "Connection": "keep-alive",
+    }
+    try:
+        r = session.get(url, headers=headers, timeout=30)
+        if r.status_code != 200:
+            log.warning("Investing requests: status=%s url=%s", r.status_code, url)
+            return None
+        return r.text or ""
+    except Exception as e:
+        log.error("Investing requests error url=%s: %s", url, e, exc_info=True)
+        return None
+
+
+def _fetch_html(session, url: str) -> Optional[str]:
+    """
+    Intenta curl_cffi primero (bypassea Cloudflare).
+    Si no está disponible o falla, cae a requests.
+    Valida que el HTML recibido sea real (>5000 chars y contenga investing).
+    """
+    html = _fetch_html_curl(url)
+    if html and len(html) > 5000 and "investing" in html.lower():
+        return html
+
+    log.debug("Investing: curl_cffi no dio HTML válido, probando requests")
+    html = _fetch_html_requests(session, url)
+    if html and len(html) > 5000:
+        return html
+
+    log.warning("Investing: HTML vacío o bloqueado (Cloudflare?) para %s", url)
+    return None
+
+
+# ── Extracción de symbol ─────────────────────────────────────────────────────
+
+def _extract_symbol_nextdata(html: str) -> Optional[str]:
+    """
+    Páginas Next.js: el instrument_id está en
+    <script id="__NEXT_DATA__" type="application/json">{...}</script>
+    """
+    try:
+        m = re.search(
+            r'<script[^>]+id=["\']__NEXT_DATA__["\'][^>]*>(.*?)</script>',
+            html, re.DOTALL | re.IGNORECASE
+        )
+        if not m:
+            return None
+        data = json.loads(m.group(1))
+        # Buscar instrument_id en cualquier nivel del JSON
+        raw = json.dumps(data)
+        mi = _RE_INSTRUMENT_ID.search(raw)
+        if mi and mi.group("id").isdigit():
+            log.debug("Investing: symbol vía __NEXT_DATA__ = %s", mi.group("id"))
+            return mi.group("id")
+    except Exception:
+        pass
+    return None
+
+
+def _extract_symbol(html: str) -> Optional[str]:
+    """
+    Extrae pair_id / instrument_id en cascada de 6 patrones.
+    Compatible con páginas legacy (jQuery) y Next.js.
+    """
+    if not html:
+        return None
+
+    normalized = html.replace("\\/", "/")
+
+    # 1) Ruta TVC en JS
+    m = _RE_TVC_PATH.search(normalized)
+    if m:
+        log.debug("Investing: symbol vía TVC path = %s", m.group("symbol"))
+        return m.group("symbol")
+
+    # 2) __NEXT_DATA__ (páginas Next.js)
+    sym = _extract_symbol_nextdata(html)
+    if sym:
+        return sym
+
+    # 3) window.histDataExcessInfo = {pairId: ...}
+    m = _RE_HISTDATA.search(html)
+    if m:
+        log.debug("Investing: symbol vía histDataExcessInfo = %s", m.group("id"))
+        return m.group("id")
+
+    # 4) dataLayer.push({instrument_id: ...}) o similar
+    m = _RE_INSTRUMENT_ID.search(html)
+    if m:
+        log.debug("Investing: symbol vía instrument_id = %s", m.group("id"))
+        return m.group("id")
+
+    # 5) allKeyValue pairid / pair_id
+    m = _RE_ALLKV_PAIRID.search(html)
+    if m:
+        log.debug("Investing: symbol vía pair_id = %s", m.group("id"))
+        return m.group("id")
+
+    # 6) data-pair-id en DOM
+    m = _RE_DATA_PAIR_ID.search(html)
+    if m:
+        log.debug("Investing: symbol vía data-pair-id = %s", m.group("id"))
+        return m.group("id")
+
+    log.warning("Investing: ningún patrón encontró symbol. HTML[0:300]: %r", html[:300])
+    return None
+
+
+def _extract_tvc_template(html: str) -> Optional[dict]:
+    if not html:
+        return None
+    m = _RE_TVC_PATH.search(html.replace("\\/", "/"))
+    if not m:
+        return None
+    return {k: m.group(k) for k in ("hash", "ts", "a", "b", "c", "symbol")}
+
+
+# ── TVC fetch ────────────────────────────────────────────────────────────────
 
 def _unix_ts(d: date, end_of_day: bool = False) -> int:
     if end_of_day:
@@ -65,119 +227,6 @@ def _parse_eu_number(text: str) -> float:
     if "," in s:
         s = s.replace(".", "").replace(",", ".")
     return float(s)
-
-
-def _prewarm_session(session) -> None:
-    """
-    Visita la portada de es.investing.com para obtener cookies de sesión y GDPR.
-    Sin esto, muchas URLs internas devuelven HTML incompleto o redirigen. [file:268]
-    """
-    try:
-        session.get(
-            "https://es.investing.com",
-            headers={
-                "User-Agent": _UA,
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
-            },
-            timeout=20,
-        )
-        # Cookie de consentimiento GDPR mínima que Investing.com espera
-        session.cookies.set("GDPR_CONSENT", "1", domain=".investing.com")
-        session.cookies.set("PHPSESSID", "prewarm", domain=".investing.com")
-    except Exception:
-        pass
-
-
-_SESSION_PREWARMED: set = set()
-
-
-def _fetch_html(session, investing_url: str) -> Optional[str]:
-    domain = urlparse(investing_url).netloc or "www.investing.com"
-
-    # Pre-calentar la sesión una sola vez por dominio [file:268]
-    if domain not in _SESSION_PREWARMED:
-        _prewarm_session(session)
-        _SESSION_PREWARMED.add(domain)
-        time.sleep(0.5)
-
-    headers = {
-        "User-Agent": _UA,
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
-        "Accept-Encoding": "gzip, deflate, br",
-        "Referer": f"https://{domain}/funds",
-        "Connection": "keep-alive",
-        "Upgrade-Insecure-Requests": "1",
-        "Sec-Fetch-Dest": "document",
-        "Sec-Fetch-Mode": "navigate",
-        "Sec-Fetch-Site": "same-origin",
-    }
-    try:
-        r = session.get(investing_url, headers=headers, timeout=30)
-        if r.status_code != 200:
-            log.warning("Investing HTML: status=%s url=%s", r.status_code, investing_url)
-            return None
-        html = r.text or ""
-        # DEBUG: muestra inicio del HTML para diagnosticar bloqueos/redirects
-        log.debug("Investing HTML: primeros 300 chars: %r", html[:300])
-        return html
-    except Exception as e:
-        log.error("Investing HTML error url=%s: %s", investing_url, e, exc_info=True)
-        return None
-
-
-def _extract_symbol(html: str) -> Optional[str]:
-    """
-    Extrae el pair_id / instrument_id numérico del HTML.
-    Orden: TVC path > histDataExcessInfo > instrument_id > allKeyValue pair_id > data-pair-id
-    """
-    if not html:
-        return None
-
-    normalized = html.replace("\\/", "/")
-
-    # 1) Ruta TVC completa (lo más específico)
-    m = _RE_TVC_PATH.search(normalized)
-    if m:
-        return m.group("symbol")
-
-    # 2) window.histDataExcessInfo = {pairId: 1036800, ...}  [file:268]
-    m = _RE_HISTDATA.search(html)
-    if m:
-        log.debug("Investing: symbol vía histDataExcessInfo = %s", m.group("id"))
-        return m.group("id")
-
-    # 3) dataLayer.push({instrument_id: 1036800})  [file:268]
-    m = _RE_INSTRUMENT_ID.search(html)
-    if m:
-        log.debug("Investing: symbol vía instrument_id = %s", m.group("id"))
-        return m.group("id")
-
-    # 4) allKeyValue pair_id  [file:268]
-    m = _RE_ALLKV_PAIRID.search(html)
-    if m:
-        log.debug("Investing: symbol vía allKeyValue pair_id = %s", m.group("id"))
-        return m.group("id")
-
-    # 5) data-pair-id en DOM (puede aparecer en sidebars con IDs ajenos)
-    m = _RE_DATA_PAIR_ID.search(html)
-    if m:
-        log.debug("Investing: symbol vía data-pair-id = %s", m.group("id"))
-        return m.group("id")
-
-    log.debug("Investing: ningún patrón matcheó. HTML sample: %r", html[:500])
-    return None
-
-
-def _extract_tvc_template(html: str) -> Optional[dict]:
-    """Extrae el template TVC si está presente en el HTML (no siempre)."""
-    if not html:
-        return None
-    m = _RE_TVC_PATH.search(html.replace("\\/", "/"))
-    if not m:
-        return None
-    return {k: m.group(k) for k in ("hash", "ts", "a", "b", "c", "symbol")}
 
 
 def _build_tvc_url(server_n: int, tpl: Optional[dict]) -> str:
@@ -207,30 +256,23 @@ def _parse_tvc_json(payload) -> List[Tuple[str, float]]:
 
 
 def _parse_html_table(html: str) -> List[Tuple[str, float]]:
-    """
-    Fallback: tabla renderizada en el HTML.
-    Acepta id='curr_table', id='currtable', o class='historicalTbl'. [file:268]
-    """
+    """Fallback: tabla #curr_table / .historicalTbl renderizada en el HTML."""
     if not html:
         return []
     try:
         soup = BeautifulSoup(html, "lxml")
-        # Cubrir ambas variantes del ID y el selector por clase  [file:268]
         table = (
             soup.select_one("table#curr_table")
             or soup.select_one("table#currtable")
             or soup.select_one("table.historicalTbl")
         )
         if not table:
-            log.debug("Investing: table#curr_table / .historicalTbl no encontrada en HTML")
             return []
-
         out = []
         for tr in table.select("tbody tr"):
             tds = tr.find_all("td")
             if len(tds) < 2:
                 continue
-            # Fecha: epoch en data-real-value  [file:268]
             d_iso: Optional[str] = None
             try:
                 epoch = tds[0].get("data-real-value")
@@ -243,13 +285,11 @@ def _parse_html_table(html: str) -> List[Tuple[str, float]]:
                     d_iso = datetime.strptime(tds[0].get_text(strip=True), "%d.%m.%Y").date().isoformat()
                 except Exception:
                     continue
-            # Precio: data-real-value del td "Último"  [file:268]
             raw = tds[1].get("data-real-value") or tds[1].get_text(strip=True)
             try:
                 out.append((d_iso, _parse_eu_number(str(raw))))
             except Exception:
                 continue
-
         out.sort(key=lambda x: x[0])
         log.debug("Investing: tabla HTML → %s filas", len(out))
         return out
@@ -258,7 +298,10 @@ def _parse_html_table(html: str) -> List[Tuple[str, float]]:
         return []
 
 
-def _tvc_request(session, url: str, symbol: str, from_ts: int, to_ts: int, referer: str) -> List[Tuple[str, float]]:
+def _tvc_request(
+    session, url: str, symbol: str,
+    from_ts: int, to_ts: int, referer: str,
+) -> List[Tuple[str, float]]:
     headers = {
         "User-Agent": _UA,
         "Accept": "application/json, text/javascript, */*; q=0.01",
@@ -286,6 +329,8 @@ def _date_chunks(start: date, end: date, years: int) -> List[Tuple[date, date]]:
     return chunks
 
 
+# ── Entry point ──────────────────────────────────────────────────────────────
+
 def scrape_investing_prices(
     session,
     investing_url: str,
@@ -294,11 +339,10 @@ def scrape_investing_prices(
     full_refresh: bool = False,
 ) -> List[Tuple[str, float]]:
     """
-    Estrategia:
-      1. Descarga HTML (con pre-warmup de sesión/cookies).
-      2. Extrae symbol (pair_id) con 5 patrones en cascada.
-      3. Llama a TVC por chunks (todos los datos si full_refresh).
-      4. Si TVC falla → tabla HTML (rango visible por defecto).
+    1. HTML via curl_cffi (bypassea Cloudflare) → requests fallback.
+    2. Extrae symbol con 6 patrones en cascada (legacy + Next.js).
+    3. TVC por chunks adaptativos (todos los datos si full_refresh).
+    4. Fallback a tabla HTML si TVC falla.
     """
     if not investing_url:
         return []
@@ -309,8 +353,9 @@ def scrape_investing_prices(
 
     symbol = _extract_symbol(html)
     if not symbol:
-        log.warning("Investing: no se pudo extraer symbol/instrument_id de %s", investing_url)
-        # Aun así intentamos la tabla HTML antes de rendirse
+        log.warning(
+            "Investing: no se pudo extraer symbol/instrument_id de %s", investing_url
+        )
         return _parse_html_table(html)
 
     tpl = _extract_tvc_template(html)
@@ -334,7 +379,7 @@ def scrape_investing_prices(
             )
             if r.status_code == 200:
                 tvc_url = candidate
-                log.debug("Investing: usando tvc%s (symbol=%s)", n, symbol)
+                log.debug("Investing: servidor tvc%s OK (symbol=%s)", n, symbol)
                 break
         except Exception:
             continue
@@ -357,7 +402,6 @@ def scrape_investing_prices(
         )
         for d, c in rows:
             collected[d] = c
-        # Si viene "lleno" puede haber un límite: dividir y repetir
         if len(rows) >= LIMIT_HINT and (e - s).days > 180:
             mid = s + timedelta(days=(e - s).days // 2)
             fetch_chunk(s, mid, depth + 1)
@@ -370,14 +414,14 @@ def scrape_investing_prices(
 
     if collected:
         out = sorted(collected.items(), key=lambda x: x[0])
-        log.debug("Investing: %s precios totales (symbol=%s)", len(out), symbol)
+        log.info("Investing: %s precios (symbol=%s) para %s", len(out), symbol, investing_url)
         return out
 
-    # ── Fallback final: tabla HTML ─────────────────────────────────────────
+    # ── Fallback final ─────────────────────────────────────────────────────
     fallback = _parse_html_table(html)
     if fallback:
         log.warning(
-            "Investing: TVC sin datos → fallback tabla HTML (%s filas) para %s",
+            "Investing: TVC sin datos → tabla HTML (%s filas) para %s",
             len(fallback), investing_url,
         )
     else:
