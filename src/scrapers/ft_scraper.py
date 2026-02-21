@@ -8,7 +8,6 @@ import re
 import time
 from datetime import date, datetime, timedelta
 from typing import Dict, List, Optional, Tuple
-from urllib.parse import parse_qs, urlparse
 
 from bs4 import BeautifulSoup
 
@@ -17,63 +16,73 @@ from ..utils import parse_float, parse_ft_date
 log = logging.getLogger("scrapers.ft_scraper")
 
 
-def _normalize_ft_url(ft_url: str) -> str:
-    """
-    Auto-corrige URLs de FT que apuntan a summary en vez de historical.
-    Ej: /tearsheet/summary? → /tearsheet/historical?
-    """
-    return re.sub(r"/tearsheet/[^/?]+\?", "/tearsheet/historical?", ft_url)
+def symbol_variants(ft_symbol: str) -> List[str]:
+    sym = (ft_symbol or "").strip()
+    if not sym:
+        return []
+    variants = [sym]
+    if ":" in sym:
+        variants.append(sym.replace(":", ""))
+    else:
+        m = re.match(r"(.+?)([A-Z]{3})$", sym)
+        if m:
+            variants.append(f"{m.group(1)}:{m.group(2)}")
+    out, seen = [], set()
+    for v in variants:
+        if v not in seen:
+            out.append(v)
+            seen.add(v)
+    return out
 
 
-def _extract_symbol(ft_url: str) -> Optional[str]:
-    """Extrae ?s=SYMBOL de la URL de FT."""
-    try:
-        sym = parse_qs(urlparse(ft_url).query).get("s", [None])[0]
-        return sym.strip() if sym else None
-    except Exception:
-        return None
-
-
-def _extract_metadata(soup: BeautifulSoup, ft_url: str) -> Dict:
-    meta: Dict = {"url": ft_url}
+def extract_tearsheet_metadata(soup: BeautifulSoup, sym_used: str, url: str) -> Dict:
+    meta: Dict = {"ft_symbol_used": sym_used, "url": url}
     h1 = soup.select_one(
         "h1.mod-tearsheet-overview__header__name,"
         "h1.mod-tearsheet-overview__header__name--large"
     )
     if h1:
         meta["name"] = h1.get_text(" ", strip=True)
-    sym = _extract_symbol(ft_url)
-    if sym:
-        m = re.search(r":([A-Z]{3})$", sym)
+    m = re.search(r":([A-Z]{3})$", sym_used)
+    if m:
+        meta["currency"] = m.group(1)
+    else:
+        m = re.search(r"([A-Z]{3})$", sym_used)
         if m:
             meta["currency"] = m.group(1)
     return meta
 
 
-def _extract_app_config(soup: BeautifulSoup) -> Optional[Dict]:
-    app = soup.select_one('div[data-module-name="HistoricalPricesApp"][data-mod-config]')
+def extract_historical_app_config(soup: BeautifulSoup) -> Optional[Dict]:
+    app = soup.select_one(
+        "div[data-module-name='HistoricalPricesApp'][data-mod-config]"
+    )
     if not app:
-        container = soup.select_one('div[data-f2-app-id="mod-tearsheet-historical-prices"]')
+        container = soup.select_one(
+            "div[data-f2-app-id='mod-tearsheet-historical-prices']"
+        )
         if container:
             app = container.select_one("div[data-mod-config]")
     if not app:
         return None
-    raw = app.get("data-mod-config", "")
+    raw = app.get("data-mod-config")
     if not raw:
         return None
+    raw_unescaped = ihtml.unescape(raw.strip())
     try:
-        cfg = json.loads(ihtml.unescape(raw).strip())
+        cfg = json.loads(raw_unescaped)
         return cfg if isinstance(cfg, dict) else None
     except Exception:
         return None
 
 
-def _to_date_param(d: date) -> str:
-    return d.strftime("%Y/%m/%d")
+def to_ft_date_param(d: date) -> str:
+    return d.strftime("%Y%m%d")
 
 
-def _date_chunks(start: date, end: date, chunk_days: int = 365) -> List[Tuple[date, date]]:
-    chunks, cur = [], start
+def date_chunks(start: date, end: date, chunk_days: int) -> List[Tuple[date, date]]:
+    chunks = []
+    cur = start
     while cur <= end:
         nxt = min(end, cur + timedelta(days=chunk_days - 1))
         chunks.append((cur, nxt))
@@ -81,126 +90,168 @@ def _date_chunks(start: date, end: date, chunk_days: int = 365) -> List[Tuple[da
     return chunks
 
 
-def _fetch_ajax_html(session, symbol_numeric: str, start: date, end: date) -> Optional[str]:
+def looks_like_full_html_document(text: str) -> bool:
+    t = (text or "").lstrip().lower()
+    return t.startswith("<!doctype html") or t.startswith("<html")
+
+
+def fetch_ajax_html(session, symbol_numeric: str, start: date, end: date) -> Optional[str]:
     url = "https://markets.ft.com/data/equities/ajax/get-historical-prices"
-    params = {"startDate": _to_date_param(start), "endDate": _to_date_param(end), "symbol": symbol_numeric}
+    params = {
+        "startDate": to_ft_date_param(start),
+        "endDate":   to_ft_date_param(end),
+        "symbol":    str(symbol_numeric),
+    }
     headers = {
-        "Accept": "application/json, text/javascript, */*; q=0.01",
+        "Accept":           "application/json, text/javascript, */*; q=0.01",
         "X-Requested-With": "XMLHttpRequest",
-        "Referer": "https://markets.ft.com/",
+        "Referer":          "https://markets.ft.com/",
     }
     try:
         r = session.get(url, params=params, headers=headers, timeout=25)
-        log.debug("FT AJAX: status=%s symbol=%s %s..%s", r.status_code, symbol_numeric, start, end)
+        log.debug("FT AJAX GET %s params=%s status=%s", url, params, r.status_code)
         if r.status_code != 200:
             return None
-        t = (r.text or "").lstrip().lower()
-        if t.startswith("<!doctype") or t.startswith("<html"):
-            log.warning("FT AJAX: respuesta HTML (bloqueo?). symbol=%s", symbol_numeric)
+        if looks_like_full_html_document(r.text):
+            sample = re.sub(r"\s+", " ", r.text or "")[:250]
+            log.warning("FT AJAX: respuesta HTML (posible bloqueo). Sample: %r", sample)
             return None
-        payload = r.json()
-        return payload.get("html") if isinstance(payload, dict) else None
+        try:
+            payload = r.json()
+        except Exception as e:
+            sample = re.sub(r"\s+", " ", r.text or "")[:250]
+            log.warning("FT AJAX: JSON inválido %s. Sample: %r", e, sample)
+            return None
+        if isinstance(payload, dict) and payload.get("html"):
+            return payload["html"]
+        return None
     except Exception as e:
-        log.warning("FT AJAX error: %s", e)
+        log.error("FT AJAX error: %s", e)
         return None
 
 
-def _parse_fragment(html_fragment: str) -> List[Tuple[str, float]]:
+def parse_prices_html_fragment(html_fragment: str) -> List[Tuple[str, float]]:
     soup = BeautifulSoup(f"<table>{html_fragment}</table>", "lxml")
-    log_rows = os.getenv("FT_LOG_ROWS", "0").strip() == "1"
     out: List[Tuple[str, float]] = []
-    for i, tr in enumerate(soup.select("tr"), 1):
+    log_rows = os.getenv("FT_LOG_ROWS", "0").strip() == "1"
+    for i, tr in enumerate(soup.select("tr"), start=1):
         tds = tr.find_all("td")
         if len(tds) < 5:
             continue
-        date_raw = tds[0].get_text(" ", strip=True)
+        date_raw  = tds[0].get_text(" ", strip=True)
         close_raw = tds[4].get_text(" ", strip=True)
         if log_rows:
-            log.debug("FT: Fila %s - %r / %r", i, date_raw, close_raw)
+            log.debug("FT AJAX Fila %s - Fecha raw %r, Close raw %r", i, date_raw, close_raw)
         try:
-            out.append((parse_ft_date(date_raw), parse_float(close_raw)))
+            d = parse_ft_date(date_raw)
+            c = parse_float(close_raw)
+            out.append((d, c))
         except Exception as e:
             if log_rows:
-                log.debug("FT: Fila %s no parseable: %s", i, e)
+                log.debug("FT AJAX No se pudo parsear fila %s: %s", i, e)
     return out
 
 
 def scrape_ft_prices(
     session,
     ft_url: str,
-    start_date: Optional[date] = None,
-    end_date: Optional[date] = None,
-    full_refresh: bool = False,
+    startdate: Optional[date] = None,
+    enddate: Optional[date] = None,
+    fullrefresh: bool = False,
 ) -> Tuple[List[Tuple[str, float]], Dict]:
-    """Acepta la URL completa de FT. Auto-corrige summary→historical. Devuelve (prices, meta)."""
-    meta: Dict = {"url": ft_url}
-    if not ft_url:
+    """
+    Scraper FT incremental o full-refresh.
+    - fullrefresh=False → rango startdate..enddate (incremental)
+    - fullrefresh=True  → backfill completo desde inception en chunks anuales
+    Devuelve ([(YYYY-MM-DD, close)], metadata_dict)
+    """
+    meta: Dict = {"ft_url_requested": ft_url}
+    symbols_to_try = symbol_variants(ft_url) if not ft_url.startswith("http") else []
+
+    # Si ft_url es una URL completa, extraemos el símbolo del parámetro ?s=
+    if ft_url.startswith("http"):
+        m = re.search(r"[?&]s=([^&]+)", ft_url)
+        if m:
+            symbols_to_try = symbol_variants(m.group(1))
+        else:
+            symbols_to_try = []
+    
+    if not symbols_to_try:
+        log.warning("FT: no se pudo extraer símbolo de %r", ft_url)
         return [], meta
 
-    # Auto-corrección: summary → historical
-    ft_url_normalized = _normalize_ft_url(ft_url)
-    if ft_url_normalized != ft_url:
-        log.info("FT: URL corregida automáticamente: %s → %s", ft_url, ft_url_normalized)
-    ft_url = ft_url_normalized
-    meta["url"] = ft_url
+    end = enddate or date.today()
 
-    end = end_date or date.today()
-    try:
-        r = session.get(ft_url, timeout=25)
-        meta["status_code"] = r.status_code
-        log.debug("FT: GET %s status=%s", ft_url, r.status_code)
-        if r.status_code != 200:
-            log.warning("FT: status=%s url=%s", r.status_code, ft_url)
-            return [], meta
+    for sym in symbols_to_try:
+        tearsheet_url = f"https://markets.ft.com/data/funds/tearsheet/historical?s={sym}"
+        meta["url"] = tearsheet_url
+        meta["ft_symbol_used"] = sym
 
-        soup = BeautifulSoup(r.text or "", "lxml")
-        meta.update(_extract_metadata(soup, ft_url))
+        try:
+            r = session.get(tearsheet_url, timeout=25)
+            meta["status_code"] = r.status_code
+            meta["final_url"] = str(getattr(r, "url", tearsheet_url))
+            log.debug("FT GET %s status=%s final_url=%s",
+                      tearsheet_url, r.status_code, meta["final_url"])
+            if r.status_code != 200:
+                continue
 
-        cfg = _extract_app_config(soup)
-        if not cfg:
-            log.warning("FT: No se encontró HistoricalPricesApp en %s", ft_url)
-            return [], meta
+            soup = BeautifulSoup(r.text or "", "lxml")
+            meta.update(extract_tearsheet_metadata(soup, sym, tearsheet_url))
 
-        symbol_numeric = str(cfg.get("symbol", "")).strip()
-        if not symbol_numeric:
-            log.warning("FT: data-mod-config sin 'symbol': %s", cfg)
-            return [], meta
+            cfg = extract_historical_app_config(soup)
+            if not cfg:
+                log.warning("FT: no se encontró HistoricalPricesApp[data-mod-config] "
+                            "(DOM cambió o bloqueo).")
+                continue
 
-        meta["symbol_numeric"] = symbol_numeric
+            symbol_numeric = str(cfg.get("symbol", "")).strip()
+            inception_raw  = str(cfg.get("inception", "")).strip()
+            if not symbol_numeric:
+                log.warning("FT: data-mod-config sin 'symbol': %s", cfg)
+                continue
 
-        inception_dt: Optional[date] = None
-        inception_raw = str(cfg.get("inception", "")).strip()
-        if inception_raw:
-            try:
-                inception_dt = datetime.fromisoformat(inception_raw.replace("Z", "+00:00")).date()
+            inception_dt: Optional[date] = None
+            if inception_raw:
+                try:
+                    inception_dt = datetime.fromisoformat(
+                        inception_raw.replace("Z", "+00:00")
+                    ).date()
+                except Exception:
+                    inception_dt = None
+
+            meta["symbol_numeric"] = symbol_numeric
+            if inception_dt:
                 meta["inception_date"] = inception_dt.isoformat()
-            except Exception:
-                pass
 
-        if full_refresh:
-            start = inception_dt or (date.today() - timedelta(days=365 * 10))
-            chunks = _date_chunks(start, end)
-        else:
-            start = start_date or (end - timedelta(days=45))
-            chunks = [(start, end)]
+            # ── Rango de fechas ──────────────────────────────────────────────
+            if fullrefresh:
+                start = inception_dt or (date.today() - timedelta(days=365 * 8))
+                chunks = date_chunks(start, end, chunk_days=365)
+            else:
+                start = startdate or (end - timedelta(days=45))
+                chunks = [(start, end)]
 
-        collected: Dict[str, float] = {}
-        for s, e in chunks:
-            frag = _fetch_ajax_html(session, symbol_numeric, s, e)
-            if frag:
-                for d, c in _parse_fragment(frag):
-                    collected[d] = c
-            if full_refresh:
-                time.sleep(0.2)
+            collected: Dict[str, float] = {}
+            for s, e_chunk in chunks:
+                frag = fetch_ajax_html(session, symbol_numeric, s, e_chunk)
+                if not frag:
+                    continue
+                rows = parse_prices_html_fragment(frag)
+                for d_iso, close in rows:
+                    collected[d_iso] = close
+                if fullrefresh:
+                    time.sleep(0.25)
 
-        if collected:
-            prices = sorted(collected.items())
-            log.debug("FT: %s precios (full_refresh=%s) para %s", len(prices), full_refresh, ft_url)
-            return prices, meta
+            if collected:
+                prices = sorted(collected.items(), key=lambda x: x[0])
+                log.debug("FT: %s precios recibidos (fullrefresh=%s)", len(prices), fullrefresh)
+                return prices, meta
 
-        log.warning("FT: 0 precios desde %s (symbol=%s)", ft_url, symbol_numeric)
+            log.warning("FT: 0 precios para symbol_numeric=%s. "
+                        "Posible bloqueo o endpoint cambió.", symbol_numeric)
 
-    except Exception as e:
-        log.error("FT error url=%s: %s", ft_url, e, exc_info=True)
+        except Exception as e:
+            log.error("FT error symbol=%s: %s", sym, e, exc_info=True)
 
     return [], meta
