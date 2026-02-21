@@ -6,11 +6,11 @@ on:
   workflow_dispatch:
     inputs:
       log_level:
-        description: "Nivel de log (DEBUG o INFO)"
+        description: "Nivel de log: DEBUG o INFO"
         required: false
         default: "INFO"
       full_refresh:
-        description: "Backfill completo (1 = sí, 0 = no)"
+        description: "Backfill completo: 1=si, 0=no"
         required: false
         default: "0"
 
@@ -40,10 +40,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Set env vars dinámicos
+      - name: Set env vars
         run: |
-          echo "LOGLEVEL=${{ github.event.inputs.log_level || 'INFO' }}" >> $GITHUB_ENV
-          echo "FULLREFRESH=${{ github.event.inputs.full_refresh || '0' }}" >> $GITHUB_ENV
+          RAW_LOG="${{ github.event.inputs.log_level }}"
+          RAW_FULL="${{ github.event.inputs.full_refresh }}"
+          echo "LOGLEVEL=${RAW_LOG:-INFO}" >> $GITHUB_ENV
+          echo "FULLREFRESH=${RAW_FULL:-0}" >> $GITHUB_ENV
 
       - name: Run updater
         env:
@@ -51,7 +53,7 @@ jobs:
           PYTHONUNBUFFERED: "1"
         run: python -m src.app
 
-      - name: Commit & push if changed
+      - name: Commit y push si hay cambios
         run: |
           git config user.name "Fund Prices Bot"
           git config user.email "actions@github.com"
