@@ -11,7 +11,7 @@ from .config import load_funds_csv
 from .http_client import build_session
 from .portfolio import read_prices_json, write_prices_json_if_changed
 from .utils import setup_logging, json_dumps_canonical
-from .scrapers.ft_scraper import scrape_ft_prices_and_metadata
+from .scrapers.ft_scraper import scrape_ft_prices
 from .scrapers.fundsquare_scraper import scrape_fundsquare_prices
 from .scrapers.investing_scraper import scrape_investing_prices
 
@@ -24,7 +24,7 @@ FUNDS_CSV  = ROOT / "funds.csv"
 log = logging.getLogger("app")
 
 
-# ── Metadata ────────────────────────────────────────────────────────────────
+# ── Metadata ─────────────────────────────────────────────────────────────────
 
 def load_metadata() -> Dict:
     if not META_FILE.exists():
@@ -50,7 +50,7 @@ def save_metadata_if_changed(meta: Dict) -> bool:
     return True
 
 
-# ── Limpieza fondos eliminados ───────────────────────────────────────────────
+# ── Limpieza fondos eliminados ────────────────────────────────────────────────
 
 def cleanup_removed_funds(active_isins: List[str], meta: Dict) -> bool:
     changed = False
@@ -76,7 +76,7 @@ def cleanup_removed_funds(active_isins: List[str], meta: Dict) -> bool:
     return changed
 
 
-# ── Merge de fuentes ─────────────────────────────────────────────────────────
+# ── Merge de fuentes ──────────────────────────────────────────────────────────
 
 def merge_updates(
     existing: Dict[str, float],
@@ -99,7 +99,7 @@ def max_existing_date(existing: Dict[str, float]) -> Optional[date]:
         return None
 
 
-# ── Main ─────────────────────────────────────────────────────────────────────
+# ── Main ──────────────────────────────────────────────────────────────────────
 
 def main() -> int:
     setup_logging()
@@ -110,9 +110,9 @@ def main() -> int:
         log.warning("No hay fondos en funds.csv")
         return 0
 
-    session     = build_session()
-    meta        = load_metadata()
-    any_changed = False
+    session      = build_session()
+    meta         = load_metadata()
+    any_changed  = False
 
     if cleanup_removed_funds([f.isin for f in funds], meta):
         any_changed = True
@@ -136,15 +136,13 @@ def main() -> int:
 
         do_full = fullrefresh or not existing
         start   = (
-            None
-            if do_full
-            else max(date(2000, 1, 1), last_dt - timedelta(days=lookback_days))
-            if last_dt
+            max(date(2000, 1, 1), last_dt - timedelta(days=lookback_days))
+            if (not do_full and last_dt)
             else None
         )
 
-        # ── FT ──────────────────────────────────────────────────────────────
-        ft_prices, ft_meta = scrape_ft_prices_and_metadata(
+        # ── FT ───────────────────────────────────────────────────────────────
+        ft_prices, ft_meta = scrape_ft_prices(
             session,
             f.ft_url,
             startdate=start,
@@ -152,10 +150,10 @@ def main() -> int:
             fullrefresh=do_full,
         )
 
-        # ── Fundsquare ───────────────────────────────────────────────────────
+        # ── Fundsquare ────────────────────────────────────────────────────────
         fs_prices = scrape_fundsquare_prices(session, f.fundsquare_url)
 
-        # ── Investing ────────────────────────────────────────────────────────
+        # ── Investing ─────────────────────────────────────────────────────────
         cached_pair_id = fmeta.get("investing_pair_id") or None
         inv_result = scrape_investing_prices(
             session,
@@ -165,7 +163,7 @@ def main() -> int:
             enddate=today,
             fullrefresh=do_full,
         )
-        # Compatibilidad: admite tanto (prices, pair_id) como solo prices
+        # Admite tanto (prices, pair_id) como solo prices
         if isinstance(inv_result, tuple) and len(inv_result) == 2:
             inv_prices, inv_pair_id = inv_result
         else:
@@ -175,7 +173,7 @@ def main() -> int:
             fmeta["investing_pair_id"] = inv_pair_id
             any_changed = True
 
-        # ── Merge y guardado ─────────────────────────────────────────────────
+        # ── Merge y guardado ──────────────────────────────────────────────────
         merged = merge_updates(existing, ft_prices, fs_prices, inv_prices)
 
         if write_prices_json_if_changed(existing_path, merged):
@@ -184,7 +182,7 @@ def main() -> int:
         else:
             log.info("Sin cambios en %s", isin)
 
-        # ── Metadata ─────────────────────────────────────────────────────────
+        # ── Metadata ──────────────────────────────────────────────────────────
         for key, val in [
             ("ft_url",         f.ft_url),
             ("fundsquare_url", f.fundsquare_url),
