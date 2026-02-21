@@ -14,6 +14,7 @@ from .utils import setup_logging, json_dumps_canonical
 from .scrapers.ft_scraper import scrape_ft_prices
 from .scrapers.fundsquare_scraper import scrape_fundsquare_prices
 from .scrapers.investing_scraper import scrape_investing_prices
+from .scrapers.ariva_scraper import scrape_ariva_prices
 
 ROOT       = Path(__file__).resolve().parents[1]
 DATA_DIR   = ROOT / "data"
@@ -123,11 +124,15 @@ def main() -> int:
 
     for f in funds:
         isin = f.isin
-        log.info("Procesando %s  FT=%s  FS=%s  INV=%s",
+        # Extracción segura para evitar fallos si config.py no está actualizado
+        ariva_url = getattr(f, "ariva_url", None)
+        
+        log.info("Procesando %s  FT=%s  FS=%s  INV=%s  ARV=%s",
                  isin,
-                 f.ft_url or "—",
-                 f.fundsquare_url or "—",
-                 f.investing_url or "—")
+                 getattr(f, "ft_url", "—") or "—",
+                 getattr(f, "fundsquare_url", "—") or "—",
+                 getattr(f, "investing_url", "—") or "—",
+                 ariva_url or "—")
 
         existing_path = PRICES_DIR / f"{isin}.json"
         existing      = read_prices_json(existing_path)
@@ -144,26 +149,25 @@ def main() -> int:
         # ── FT ───────────────────────────────────────────────────────────────
         ft_prices, ft_meta = scrape_ft_prices(
             session,
-            f.ft_url,
+            getattr(f, "ft_url", None),
             startdate=start,
             enddate=today,
             fullrefresh=do_full,
         )
 
         # ── Fundsquare ────────────────────────────────────────────────────────
-        fs_prices = scrape_fundsquare_prices(session, f.fundsquare_url)
+        fs_prices = scrape_fundsquare_prices(session, getattr(f, "fundsquare_url", None))
 
         # ── Investing ─────────────────────────────────────────────────────────
         cached_pair_id = fmeta.get("investing_pair_id") or None
         inv_result = scrape_investing_prices(
             session,
-            f.investing_url,
+            getattr(f, "investing_url", None),
             cached_pair_id=cached_pair_id,
             startdate=start,
             enddate=today,
             fullrefresh=do_full,
         )
-        # Admite tanto (prices, pair_id) como solo prices
         if isinstance(inv_result, tuple) and len(inv_result) == 2:
             inv_prices, inv_pair_id = inv_result
         else:
@@ -173,8 +177,21 @@ def main() -> int:
             fmeta["investing_pair_id"] = inv_pair_id
             any_changed = True
 
+        # ── Ariva ─────────────────────────────────────────────────────────────
+        ariva_prices_tuples = []
+        if ariva_url:
+            ariva_result = scrape_ariva_prices(ariva_url)
+            if isinstance(ariva_result, tuple) and len(ariva_result) >= 1:
+                raw_ariva = ariva_result[0]
+                if raw_ariva:
+                    # Convierte [{"date": "...", "close": ...}] a [("...", ...)] para compatibilidad
+                    if isinstance(raw_ariva[0], dict):
+                        ariva_prices_tuples = [(p["date"], p["close"]) for p in raw_ariva if "date" in p and "close" in p]
+                    else:
+                        ariva_prices_tuples = raw_ariva
+
         # ── Merge y guardado ──────────────────────────────────────────────────
-        merged = merge_updates(existing, ft_prices, fs_prices, inv_prices)
+        merged = merge_updates(existing, ft_prices, fs_prices, inv_prices, ariva_prices_tuples)
 
         if write_prices_json_if_changed(existing_path, merged):
             log.info("Actualizado %s → %s puntos", isin, len(merged))
@@ -184,9 +201,10 @@ def main() -> int:
 
         # ── Metadata ──────────────────────────────────────────────────────────
         for key, val in [
-            ("ft_url",         f.ft_url),
-            ("fundsquare_url", f.fundsquare_url),
-            ("investing_url",  f.investing_url),
+            ("ft_url",         getattr(f, "ft_url", None)),
+            ("fundsquare_url", getattr(f, "fundsquare_url", None)),
+            ("investing_url",  getattr(f, "investing_url", None)),
+            ("ariva_url",      ariva_url),
         ]:
             if val and fmeta.get(key) != val:
                 fmeta[key] = val
