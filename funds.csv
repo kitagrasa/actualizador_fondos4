@@ -2,7 +2,7 @@ isin,ft_url,fundsquare_url,investing_url
 LU0563745743,https://markets.ft.com/data/funds/tearsheet/historical?s=LU0563745743:EUR,https://www.fundsquare.net/security/histo-prices?idInstr=87217,
 LU0524465548,https://markets.ft.com/data/funds/tearsheet/historical?s=LU0524465548:EUR,https://www.fundsquare.net/security/histo-prices?idInstr=159836,https://es.investing.com/funds/lu0524465548-historical-data
 LU1598720172,https://markets.ft.com/data/funds/tearsheet/historical?s=LU1598720172:EUR,https://www.fundsquare.net/security/histo-prices?idInstr=268051,https://es.investing.com/funds/lu1598720172-historical-data
-LU1598719752,https://markets.ft.com/data/funds/tearsheet/summary?s=LU1598719752:EUR,https://www.fundsquare.net/security/histo-prices?idInstr=268050,https://es.investing.com/funds/lu1598719752-historical-data
+LU1598719752,https://markets.ft.com/data/funds/tearsheet/historical?s=LU1598719752:EUR,https://www.fundsquare.net/security/histo-prices?idInstr=268050,https://es.investing.com/funds/lu1598719752-historical-data
 LU1822851884,https://markets.ft.com/data/funds/tearsheet/historical?s=LU1822851884:EUR,https://www.fundsquare.net/security/histo-prices?idInstr=328171,https://es.investing.com/funds/lu1822851884-historical-data
 LU1223083087,https://markets.ft.com/data/funds/tearsheet/historical?s=LU1223083087:EUR,https://www.fundsquare.net/security/histo-prices?idInstr=248012,https://es.investing.com/funds/schroder-intlslct-glblgold-a-acceur-historical-data
 LU0223332320,https://markets.ft.com/data/funds/tearsheet/historical?s=LU0223332320:EUR,https://www.fundsquare.net/security/histo-prices?idInstr=28356,
