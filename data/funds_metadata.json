@@ -1,8 +1,10 @@
 {
   "funds": {
     "FR0010930644": {
+      "ariva_url": "https://www.ariva.de/etf/amundi-global-hydrogen-ucits-etf-acc/kurse/historische-kurse?boerse_id=45",
       "currency": "EUR",
       "ft_symbol": "AMEE:GER",
+      "ft_url": "https://markets.ft.com/data/etfs/tearsheet/historical?s=AMEE:GER:EUR",
       "fundsquare_idInstr": "",
       "investing_pair_id": "38778",
       "investing_url": "https://es.investing.com/etfs/amundi-etf-msci-europe-energy-historical-data?cid=45955",
