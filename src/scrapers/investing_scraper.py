@@ -1,15 +1,14 @@
 from __future__ import annotations
 
+import json
 import logging
 import re
 import time
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
 from bs4 import BeautifulSoup
-
-from ..utils import parse_float
 
 log = logging.getLogger("scrapers.investing")
 
@@ -19,8 +18,6 @@ _UA = (
 )
 
 # Señales "fuertes" de challenge (best-effort).
-# OJO: Investing a veces incluye cadenas “sospechosas” aunque el HTML traiga datos;
-# por eso solo hacemos WARNING si NO hay señales claras de tabla/datos.
 _BLOCK_MARKERS = [
     "/cdn-cgi/challenge-platform",
     "cf-turnstile",
@@ -31,6 +28,16 @@ _BLOCK_MARKERS = [
     "captcha",
 ]
 
+# pairId/instrumentId/smlId aparecen de varias formas en el HTML. [file:299]
+_RE_HISTINFO = re.compile(
+    r"histDataExcessInfo.*?pairId\s*(?:[:=]\s*)?(?P<pair>\d{3,10}).*?smlId\s*(?:[:=]\s*)?(?P<sml>\d{3,12})",
+    re.I | re.S,
+)
+_RE_DATALAYER_INSTRUMENT = re.compile(r"dataLayer\.push\(\s*['\"]instrumentid(?P<id>\d{3,10})['\"]\s*\)", re.I)
+_RE_PAIRID_GENERIC = re.compile(r"\bpairId\b\s*(?:[:=]\s*)?(?P<id>\d{3,10})", re.I)
+_RE_DATA_PAIR_ID = re.compile(r"\bdata-pair-id\b\s*=\s*['\"]?(?P<id>\d{3,10})", re.I)
+_RE_PID_LAST = re.compile(r"\bpid-(?P<id>\d{3,10})-last\b", re.I)
+
 
 def _looks_blocked(html: str) -> bool:
     if not html:
@@ -39,16 +46,24 @@ def _looks_blocked(html: str) -> bool:
     return any(m in low for m in _BLOCK_MARKERS)
 
 
-def _fetch_html(session, investing_url: str) -> Optional[str]:
-    domain = urlparse(investing_url).netloc or "www.investing.com"
-    headers = {
+def _build_headers(domain: str, referer: str, accept: str) -> Dict[str, str]:
+    return {
         "User-Agent": _UA,
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept": accept,
         "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
-        "Referer": f"https://{domain}/",
+        "Origin": f"https://{domain}",
+        "Referer": referer,
         "Connection": "keep-alive",
-        "Upgrade-Insecure-Requests": "1",
     }
+
+
+def _fetch_html(session, investing_url: str) -> Optional[str]:
+    domain = urlparse(investing_url).netloc or "es.investing.com"
+    headers = _build_headers(
+        domain=domain,
+        referer=f"https://{domain}/",
+        accept="text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    )
     try:
         r = session.get(investing_url, headers=headers, timeout=30, allow_redirects=True)
         if r.status_code != 200:
@@ -60,39 +75,24 @@ def _fetch_html(session, investing_url: str) -> Optional[str]:
             log.warning("Investing HTML: demasiado corto (len=%s) url=%s", len(html), investing_url)
             return None
 
-        # Evitar falsos positivos: si hay indicios claros de tabla/datos, no hagas WARNING aunque haya markers.
-        low = html.lower()
-        has_useful_hint = (
-            ("currtable" in low)
-            or ("historicaltbl" in low)
-            or ("data-real-value" in low)
-            or ("data-pair-id" in low)
-        )
-
-        if _looks_blocked(html) and not has_useful_hint:
+        # No “bloquees” el flujo solo por markers; a veces la página trae datos igualmente.
+        if _looks_blocked(html):
             log.warning(
                 "Investing HTML: parece bloqueado/challenge url=%s (len=%s)",
-                investing_url, len(html),
+                investing_url,
+                len(html),
             )
 
         return html
     except Exception as e:
-        log.error("Investing HTML error url=%s: %s", investing_url, e)
+        log.error("Investing HTML error url=%s: %s", investing_url, e, exc_info=True)
         return None
 
 
-# ── Extraer pair_id / sml_id ────────────────────────────────────────────────
-
-_RE_HISTINFO = re.compile(
-    r"histDataExcessInfo.*?pairId\s*(?:[:=]\s*)?(?P<pair>\d{3,10}).*?smlId\s*(?:[:=]\s*)?(?P<sml>\d{3,12})",
-    re.I | re.S,
-)
-_RE_PAIRID_GENERIC = re.compile(r"\bpairId\b\s*(?:[:=]\s*)?(\d{3,10})", re.I)
-_RE_DATALAYER_INSTRUMENTID = re.compile(r"\binstrumentid\s*(?:[:=]\s*)?(\d{3,12})", re.I)
-_RE_DATA_PAIR_ID = re.compile(r"\bdata-pair-id\b\s*=\s*['\"]?(\d{3,10})", re.I)
-
-
-def _extract_pair_and_sml(html: str, soup: Optional[BeautifulSoup] = None) -> Tuple[Optional[str], Optional[str]]:
+def _extract_pair_and_sml(html: str) -> Tuple[Optional[str], Optional[str]]:
+    """
+    Devuelve (pair_id, sml_id) si se pueden extraer del HTML. [file:299]
+    """
     if not html:
         return None, None
 
@@ -100,154 +100,151 @@ def _extract_pair_and_sml(html: str, soup: Optional[BeautifulSoup] = None) -> Tu
     if m:
         return m.group("pair"), m.group("sml")
 
-    # 1) En muchos fondos aparece como data-pair-id en el DOM principal
-    try:
-        if soup is not None:
-            node = soup.select_one("div.instrumentHead [data-pair-id]") or soup.select_one("[data-pair-id]")
-            if node:
-                pid = (node.get("data-pair-id") or "").strip()
-                if pid.isdigit():
-                    return pid, None
-    except Exception:
-        pass
+    m = _RE_DATALAYER_INSTRUMENT.search(html)
+    if m:
+        return m.group("id"), None
 
-    # 2) dataLayer.push('instrumentId1036800') o variantes
-    m0 = _RE_DATALAYER_INSTRUMENTID.search(html)
-    if m0 and m0.group(1).isdigit():
-        return m0.group(1), None
+    m = _RE_DATA_PAIR_ID.search(html)
+    if m:
+        return m.group("id"), None
 
-    # 3) pairId suelto
-    m2 = _RE_PAIRID_GENERIC.search(html)
-    if m2:
-        return m2.group(1), None
+    m = _RE_PID_LAST.search(html)
+    if m:
+        return m.group("id"), None
 
-    # 4) data-pair-id suelto en HTML
-    m3 = _RE_DATA_PAIR_ID.search(html)
-    if m3:
-        return m3.group(1), None
+    m = _RE_PAIRID_GENERIC.search(html)
+    if m:
+        return m.group("id"), None
 
     return None, None
 
 
-# ── Parse tabla HTML (#currtable) ───────────────────────────────────────────
+def _parse_investing_number(text: str) -> float:
+    """
+    Convierte:
+      - "88,280" -> 88.280
+      - "1.234,56" -> 1234.56
+      - "1234.56" -> 1234.56
+    """
+    s = (text or "").strip().replace("\xa0", "").replace(" ", "")
+    if not s:
+        raise ValueError("Número vacío")
 
-def _epoch_to_date_iso(epoch_str: str) -> Optional[str]:
-    s = (epoch_str or "").strip()
-    if not s.isdigit():
+    if "," in s and "." in s:
+        # Formato EU: puntos miles, coma decimal
+        s = s.replace(".", "").replace(",", ".")
+    elif "," in s:
+        s = s.replace(",", ".")
+
+    # Dejar solo lo "numérico" al principio si viene algo extra
+    m = re.search(r"[-+]?\d+(?:\.\d+)?", s)
+    if not m:
+        raise ValueError(f"No se pudo parsear número: {text!r}")
+    return float(m.group(0))
+
+
+def _date_from_td(td) -> Optional[str]:
+    """
+    Preferimos epoch en data-real-value cuando exista. [file:299]
+    """
+    if td is None:
         return None
-    try:
-        n = int(s)
-        # seconds vs ms
-        if n > 10_000_000_000:
-            n = n // 1000
-        return datetime.utcfromtimestamp(n).date().isoformat()
-    except Exception:
-        return None
 
+    epoch = (td.get("data-real-value") or "").strip()
+    if epoch.isdigit():
+        try:
+            return datetime.fromtimestamp(int(epoch), tz=timezone.utc).date().isoformat()
+        except Exception:
+            pass
 
-def _find_hist_table(soup: BeautifulSoup):
-    # Orden: lo más específico primero
-    t = soup.select_one("table#currtable")
-    if t:
-        return t
-    t = soup.find("table", id=re.compile(r"currtable", re.I))
-    if t:
-        return t
-    # Fallbacks frecuentes
-    t = soup.select_one("table.historicalTbl")
-    if t:
-        return t
-    t = soup.select_one("table.genTbl.historicalTbl")
-    if t:
-        return t
+    s = td.get_text(" ", strip=True)
+    for fmt in ("%d.%m.%Y", "%d/%m/%Y", "%Y-%m-%d", "%b %d, %Y", "%d %b, %Y"):
+        try:
+            return datetime.strptime(s, fmt).date().isoformat()
+        except Exception:
+            continue
     return None
+
+
+def _parse_prices_from_table(table) -> List[Tuple[str, float]]:
+    """
+    Tabla “histórica” típica: Date | Last | Open | High | Low | Change%.
+    Nos quedamos con Date y Last (close).
+    """
+    out: List[Tuple[str, float]] = []
+    for tr in table.select("tbody tr"):
+        tds = tr.find_all("td")
+        if len(tds) < 2:
+            continue
+
+        d_iso = _date_from_td(tds[0])
+        if not d_iso:
+            continue
+
+        raw_last = tds[1].get("data-real-value") or tds[1].get_text(" ", strip=True)
+        try:
+            close = _parse_investing_number(str(raw_last))
+        except Exception:
+            continue
+
+        out.append((d_iso, close))
+
+    out.sort(key=lambda x: x[0])
+    return out
 
 
 def _parse_html_currtable(html: str) -> List[Tuple[str, float]]:
     """
-    Extrae (YYYY-MM-DD, close) desde la tabla renderizada en la propia página.
-
-    IMPORTANTE: NO dependemos de <tbody>, porque a veces no existe en el HTML servido.
+    Fallback: parsea lo que haya renderizado en la propia página (suele ser “lo visible”).
     """
     if not html:
         return []
 
-    try:
-        soup = BeautifulSoup(html, "lxml")
-        table = _find_hist_table(soup)
-        if not table:
-            return []
+    soup = BeautifulSoup(html, "lxml")
 
-        out: List[Tuple[str, float]] = []
-
-        # No asumir <tbody>: coger todos los tr y filtrar por td>=2
-        for tr in table.find_all("tr"):
-            tds = tr.find_all("td")
-            if len(tds) < 2:
-                continue
-
-            # Fecha
-            d_iso = _epoch_to_date_iso((tds[0].get("data-real-value") or "").strip())
-            if not d_iso:
-                try:
-                    d_iso = datetime.strptime(tds[0].get_text(strip=True), "%d.%m.%Y").date().isoformat()
-                except Exception:
-                    continue
-
-            # Close (Último)
-            raw = tds[1].get("data-real-value") or tds[1].get_text(strip=True)
-            try:
-                out.append((d_iso, parse_float(str(raw))))
-            except Exception:
-                continue
-
-        out.sort(key=lambda x: x[0])
-        return out
-    except Exception as e:
-        log.debug("Investing: error parseando tabla HTML: %s", e)
+    # Selectores típicos observados en Investing: #currtable y/o .historicalTbl. [file:299]
+    table = (
+        soup.select_one("table#currtable")
+        or soup.select_one("table.historicalTbl#currtable")
+        or soup.select_one("table.historicalTbl")
+    )
+    if not table:
         return []
 
-
-def _filter_range(rows: List[Tuple[str, float]], start: date, end: date) -> List[Tuple[str, float]]:
-    if not rows:
-        return []
-    out: List[Tuple[str, float]] = []
-    for d_iso, close in rows:
-        try:
-            d = datetime.strptime(d_iso, "%Y-%m-%d").date()
-        except Exception:
-            continue
-        if start <= d <= end:
-            out.append((d_iso, close))
-    return out
+    return _parse_prices_from_table(table)
 
 
-# ── HistoricalDataAjax (fallback / full refresh) ────────────────────────────
-
-def _ajax_post(
+def _post_historical_data_ajax(
     session,
+    investing_url: str,
     pair_id: str,
+    sml_id: Optional[str],
     st: date,
     en: date,
-    referer: str,
-    sml_id: Optional[str] = None,
 ) -> Optional[str]:
-    domain = urlparse(referer).netloc or "es.investing.com"
-    url = f"https://{domain}/instruments/HistoricalDataAjax"
+    """
+    Llama al endpoint interno /instruments/HistoricalDataAjax (mismo dominio).
+    Devuelve HTML (a veces viene directo, a veces envuelto en JSON en 'data').
+    """
+    parsed = urlparse(investing_url)
+    domain = parsed.netloc or "es.investing.com"
 
-    headers = {
-        "User-Agent": _UA,
-        "Accept": "application/json, text/javascript, */*; q=0.01",
-        "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
-        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-        "X-Requested-With": "XMLHttpRequest",
-        "Origin": f"https://{domain}",
-        "Referer": referer,
-        "Connection": "keep-alive",
-    }
+    ajax_url = f"https://{domain}/instruments/HistoricalDataAjax"
+    headers = _build_headers(
+        domain=domain,
+        referer=investing_url,
+        accept="application/json, text/javascript, */*; q=0.01",
+    )
+    headers.update(
+        {
+            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+            "X-Requested-With": "XMLHttpRequest",
+        }
+    )
 
+    # Formato de fechas típico del POST de Investing (mm/dd/YYYY).
     data = {
-        "curr_id": pair_id,
+        "curr_id": str(pair_id),
         "st_date": st.strftime("%m/%d/%Y"),
         "end_date": en.strftime("%m/%d/%Y"),
         "interval_sec": "Daily",
@@ -256,153 +253,149 @@ def _ajax_post(
         "action": "historical_data",
     }
     if sml_id and sml_id.isdigit():
+        # No siempre es obligatorio, pero si existe en el HTML, ayuda en algunos instrumentos.
         data["smlID"] = sml_id
         data["smlId"] = sml_id
 
     try:
-        r = session.post(url, data=data, headers=headers, timeout=30)
+        r = session.post(ajax_url, data=data, headers=headers, timeout=30)
         if r.status_code != 200:
-            log.warning("Investing AJAX: status=%s pair_id=%s", r.status_code, pair_id)
+            log.warning("Investing AJAX: status=%s pair_id=%s url=%s", r.status_code, pair_id, investing_url)
             return None
 
-        payload = r.json()
-        if isinstance(payload, dict):
-            frag = payload.get("data", "")
-            if frag and len(frag) > 10:
-                return frag
-        return None
+        text = r.text or ""
+        if not text.strip():
+            return None
+
+        # A veces devuelve JSON con clave data, a veces HTML directo.
+        t = text.lstrip()
+        if t.startswith("{"):
+            try:
+                payload = json.loads(text)
+                if isinstance(payload, dict):
+                    frag = payload.get("data")
+                    if isinstance(frag, str) and frag.strip():
+                        return frag
+            except Exception:
+                # Si no es JSON válido, caerá a HTML directo
+                pass
+
+        return text
     except Exception as e:
         log.debug("Investing AJAX error pair_id=%s: %s", pair_id, e)
         return None
 
 
-def _parse_ajax_fragment(html_fragment: str) -> List[Tuple[str, float]]:
-    if not html_fragment:
-        return []
-    try:
-        soup = BeautifulSoup(f"<table><tbody>{html_fragment}</tbody></table>", "lxml")
-        out: List[Tuple[str, float]] = []
-
-        for tr in soup.select("tr"):
-            tds = tr.find_all("td")
-            if len(tds) < 2:
-                continue
-
-            d_iso = _epoch_to_date_iso((tds[0].get("data-real-value") or "").strip())
-            if not d_iso:
-                try:
-                    d_iso = datetime.strptime(tds[0].get_text(strip=True), "%d.%m.%Y").date().isoformat()
-                except Exception:
-                    continue
-
-            raw = tds[1].get("data-real-value") or tds[1].get_text(strip=True)
-            try:
-                out.append((d_iso, parse_float(str(raw))))
-            except Exception:
-                continue
-
-        out.sort(key=lambda x: x[0])
-        return out
-    except Exception as e:
-        log.debug("Investing: error parseando fragmento AJAX: %s", e)
+def _parse_ajax_fragment(fragment: str) -> List[Tuple[str, float]]:
+    """
+    El fragmento suele contener <table ...>...</table> o solo <tr>...</tr>.
+    """
+    if not fragment:
         return []
 
+    soup = BeautifulSoup(fragment, "lxml")
 
-def _date_chunks(start: date, end: date, months: int) -> List[Tuple[date, date]]:
-    chunks: List[Tuple[date, date]] = []
-    cur = start
-    while cur <= end:
-        nxt = min(end, cur + timedelta(days=months * 30))
-        chunks.append((cur, nxt))
-        cur = nxt + timedelta(days=1)
-    return chunks
+    table = soup.select_one("table")
+    if table:
+        return _parse_prices_from_table(table)
 
+    # Si viene solo como filas <tr>, lo envolvemos.
+    soup2 = BeautifulSoup(f"<table><tbody>{fragment}</tbody></table>", "lxml")
+    table2 = soup2.select_one("table")
+    if not table2:
+        return []
+    return _parse_prices_from_table(table2)
 
-# ── Entry point ─────────────────────────────────────────────────────────────
 
 def scrape_investing_prices(
     session,
     investing_url: str,
-    cached_pair_id: Optional[str] = None,
-    start_date: Optional[date] = None,
-    end_date: Optional[date] = None,
-    full_refresh: bool = False,
-) -> Tuple[List[Tuple[str, float]], Optional[str]]:
+    startdate: Optional[date] = None,
+    enddate: Optional[date] = None,
+    fullrefresh: bool = False,
+) -> List[Tuple[str, float]]:
     """
-    Estrategia robusta (Actions-friendly):
-      1) GET HTML y parse de tabla (#currtable) SIN depender de <tbody>.
-      2) Extraer pair_id/sml_id del HTML para cachear.
-      3) Si tabla vacía: fallback AJAX (1 intento) para el rango incremental.
-      4) Si full_refresh=True: AJAX por chunks; si falla, devuelve lo de la tabla.
+    Devuelve lista [(YYYY-MM-DD, close)].
+
+    Estrategia:
+      1) GET HTML (para cookies + extraer pair_id).
+      2) HistoricalDataAjax en rangos (esto permite traer TODO el histórico).
+      3) Fallback final a parsear #currtable (solo si AJAX falla).
     """
     if not investing_url:
-        return [], None
-
-    end = end_date or date.today()
-    start = date(2000, 1, 1) if full_refresh else (start_date or (end - timedelta(days=45)))
+        return []
 
     html = _fetch_html(session, investing_url)
     if not html:
-        return [], None
+        return []
 
-    # Parse tabla HTML (más estable)
-    table_rows = _parse_html_currtable(html)
-    table_rows = _filter_range(table_rows, start, end)
+    pair_id, sml_id = _extract_pair_and_sml(html)
+    if not pair_id:
+        log.warning("Investing: no se pudo extraer pair_id de %s", investing_url)
+        # Sin pair_id no hay AJAX; devolvemos lo que se pueda de la tabla visible.
+        rows = _parse_html_currtable(html)
+        if not rows:
+            log.warning("Investing: tabla HTML vacía/no encontrada para %s", investing_url)
+        return rows
 
-    # Extraer pair_id/sml_id para cache / AJAX
-    soup: Optional[BeautifulSoup] = None
-    try:
-        soup = BeautifulSoup(html, "lxml")
-    except Exception:
-        soup = None
+    end = enddate or date.today()
 
-    pair_id_html, sml_id = _extract_pair_and_sml(html, soup=soup)
-    pair_id = (cached_pair_id or "").strip() or pair_id_html
+    # Si no nos dan startdate o pedimos fullrefresh, hacemos barrido hacia atrás hasta el inicio real.
+    if fullrefresh or startdate is None:
+        # Seguridad: límite duro de iteraciones para no colgarnos si cambian el endpoint.
+        chunk_days = 365 * 5  # 5 años por request
+        max_loops = 200
 
-    # Si hay tabla y NO es full refresh, terminamos (incremental)
-    if table_rows and not full_refresh:
-        log.info("Investing: %s precios (tabla HTML) para %s", len(table_rows), investing_url)
-        return table_rows, pair_id
-
-    # Si la tabla vino vacía, prueba 1 AJAX “rápido” incluso sin full_refresh (soluciona casos sin currtable).
-    if (not table_rows) and pair_id and pair_id.isdigit():
-        frag = _ajax_post(session, pair_id, start, end, investing_url, sml_id=sml_id)
-        if frag:
-            ajax_rows = _parse_ajax_fragment(frag)
-            ajax_rows = _filter_range(ajax_rows, start, end)
-            if ajax_rows:
-                log.info("Investing: %s precios (AJAX fallback) para %s", len(ajax_rows), investing_url)
-                return ajax_rows, pair_id
-
-    # Full refresh: AJAX por chunks (best-effort)
-    if full_refresh and pair_id and pair_id.isdigit():
         collected: Dict[str, float] = {}
-        for s, e in _date_chunks(start, end, months=12):
-            frag = _ajax_post(session, pair_id, s, e, investing_url, sml_id=sml_id)
-            if frag:
-                for d, c in _parse_ajax_fragment(frag):
-                    collected[d] = c
-            time.sleep(0.2)
+        found_any = False
+        empty_streak = 0
+
+        cur_end = end
+        min_start = date(1900, 1, 1)
+
+        for _ in range(max_loops):
+            if cur_end < min_start:
+                break
+
+            cur_start = max(min_start, cur_end - timedelta(days=chunk_days - 1))
+            frag = _post_historical_data_ajax(session, investing_url, pair_id, sml_id, cur_start, cur_end)
+            rows = _parse_ajax_fragment(frag) if frag else []
+
+            if rows:
+                found_any = True
+                empty_streak = 0
+                for d_iso, close in rows:
+                    collected[d_iso] = close
+            else:
+                empty_streak += 1
+
+            # Si ya encontramos datos y encadenamos vacíos, es muy probable que hayamos pasado el inception.
+            if found_any and empty_streak >= 3:
+                break
+
+            cur_end = cur_start - timedelta(days=1)
+            time.sleep(0.15)
 
         if collected:
             out = sorted(collected.items(), key=lambda x: x[0])
-            log.info("Investing: %s precios (AJAX) pair_id=%s para %s", len(out), pair_id, investing_url)
-            return out, pair_id
+            log.debug("Investing: histórico completo %s puntos (pair_id=%s)", len(out), pair_id)
+            return out
 
-        # Si AJAX no da nada, devuelve lo que tengas de la tabla (aunque sea vacío)
-        if table_rows:
-            log.warning(
-                "Investing: AJAX sin datos (posible 403/bloqueo). Usando tabla HTML (%s filas) para %s",
-                len(table_rows), investing_url,
-            )
-            return table_rows, pair_id
+        # Si AJAX no dio nada, última opción: tabla visible
+        rows = _parse_html_currtable(html)
+        if not rows:
+            log.warning("Investing: sin datos vía AJAX ni tabla HTML para %s (pair_id=%s)", investing_url, pair_id)
+        return rows
 
-        log.warning("Investing: sin datos por AJAX ni por tabla HTML para %s (pair_id=%s).", investing_url, pair_id)
-        return [], pair_id
+    # Incremental: pedir SOLO el rango necesario
+    st = startdate
+    frag = _post_historical_data_ajax(session, investing_url, pair_id, sml_id, st, end)
+    rows = _parse_ajax_fragment(frag) if frag else []
+    if rows:
+        return rows
 
-    # No full_refresh y no hay nada
-    if not table_rows:
-        log.warning("Investing: tabla HTML vacía/no encontrada para %s.", investing_url)
-        return [], pair_id
-
-    return table_rows, pair_id
+    # Fallback: tabla visible
+    rows = _parse_html_currtable(html)
+    if not rows:
+        log.warning("Investing: tabla HTML vacía/no encontrada para %s", investing_url)
+    return rows
