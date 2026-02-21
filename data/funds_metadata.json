@@ -4,6 +4,7 @@
       "currency": "EUR",
       "ft_symbol": "AMEE:GER",
       "fundsquare_idInstr": "",
+      "investing_pair_id": "38778",
       "investing_url": "https://es.investing.com/etfs/amundi-etf-msci-europe-energy-historical-data?cid=45955",
       "name": "Amundi Global Hydrogen UCITS ETF - Acc"
     },
@@ -12,6 +13,7 @@
       "ft_symbol": "LU0171306680",
       "fundsquare_idInstr": "6401",
       "fundsquare_url": "https://www.fundsquare.net/security/histo-prices?idInstr=6401",
+      "investing_pair_id": "1036800",
       "investing_url": "https://es.investing.com/funds/world-gold-fund-e2e-historical-data"
     },
     "LU0223332320": {
@@ -28,6 +30,7 @@
       "ft_url": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU0524465548:EUR",
       "fundsquare_idInstr": "159836",
       "fundsquare_url": "https://www.fundsquare.net/security/histo-prices?idInstr=159836",
+      "investing_pair_id": "1238609",
       "investing_url": "https://es.investing.com/funds/lu0524465548-historical-data",
       "name": "Alken Fund - Small Cap Europe Class A"
     },
@@ -45,6 +48,7 @@
       "ft_url": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU1223083087:EUR",
       "fundsquare_idInstr": "248012",
       "fundsquare_url": "https://www.fundsquare.net/security/histo-prices?idInstr=248012",
+      "investing_pair_id": "1107198",
       "investing_url": "https://es.investing.com/funds/schroder-intlslct-glblgold-a-acceur-historical-data",
       "name": "Schroder International Selection Fund Global Gold A Accumulation EUR Hedged"
     },
@@ -54,6 +58,7 @@
       "ft_url": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU1598719752:EUR",
       "fundsquare_idInstr": "268050",
       "fundsquare_url": "https://www.fundsquare.net/security/histo-prices?idInstr=268050",
+      "investing_pair_id": "1177605",
       "investing_url": "https://es.investing.com/funds/lu1598719752-historical-data",
       "name": "Cobas LUX SICAV - Cobas International Fund-P Acc EUR"
     },
@@ -63,6 +68,7 @@
       "ft_url": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU1598720172:EUR",
       "fundsquare_idInstr": "268051",
       "fundsquare_url": "https://www.fundsquare.net/security/histo-prices?idInstr=268051",
+      "investing_pair_id": "1177606",
       "investing_url": "https://es.investing.com/funds/lu1598720172-historical-data",
       "name": "Cobas LUX SICAV - Cobas Large Cap Fund-P Acc EUR"
     },
@@ -72,6 +78,7 @@
       "ft_url": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU1822851884:EUR",
       "fundsquare_idInstr": "328171",
       "fundsquare_url": "https://www.fundsquare.net/security/histo-prices?idInstr=328171",
+      "investing_pair_id": "1239517",
       "investing_url": "https://es.investing.com/funds/lu1822851884-historical-data",
       "name": "LUX MULTIMANAGER SICAV - Finserve Global Security Fund I EUR R"
     },
@@ -81,6 +88,7 @@
       "ft_url": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU1832174962:EUR",
       "fundsquare_idInstr": "310815",
       "fundsquare_url": "https://www.fundsquare.net/security/histo-prices?idInstr=310815",
+      "investing_pair_id": "1181284",
       "investing_url": "https://es.investing.com/funds/lu1832174962-historical-data",
       "name": "Indépendance AM Europe Small A (C)"
     }
