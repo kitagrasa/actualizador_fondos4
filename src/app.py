@@ -20,7 +20,6 @@ ROOT       = Path(__file__).resolve().parents[1]
 DATA_DIR   = ROOT / "data"
 PRICES_DIR = DATA_DIR / "prices"
 META_FILE  = DATA_DIR / "funds_metadata.json"
-FUNDS_CSV  = ROOT / "funds.csv"
 
 log = logging.getLogger("app")
 
@@ -106,10 +105,16 @@ def main() -> int:
     setup_logging()
     log.info("Inicio actualización")
 
-    funds = load_funds_csv(FUNDS_CSV)
+    # ── NUEVO: Control estricto del Secreto ──
+    funds_csv_url = os.environ.get("FUNDS_CSV_URL", "").strip()
+    if not funds_csv_url.startswith("http"):
+        log.error("CRÍTICO: El secreto FUNDS_CSV_URL no está configurado o no es una URL válida. Abortando.")
+        return 1  # Exit code 1 forzará a GitHub Actions a fallar y avisarte
+        
+    funds = load_funds_csv(funds_csv_url)
     if not funds:
-        log.warning("No hay fondos en funds.csv")
-        return 0
+        log.error("CRÍTICO: La descarga devolvió 0 fondos. Verifica la URL de Google Sheets. Abortando.")
+        return 1
 
     session      = build_session()
     meta         = load_metadata()
@@ -124,7 +129,6 @@ def main() -> int:
 
     for f in funds:
         isin = f.isin
-        # Extracción segura para evitar fallos si config.py no está actualizado
         ariva_url = getattr(f, "ariva_url", None)
         
         log.info("Procesando %s  FT=%s  FS=%s  INV=%s  ARV=%s",
@@ -184,7 +188,6 @@ def main() -> int:
             if isinstance(ariva_result, tuple) and len(ariva_result) >= 1:
                 raw_ariva = ariva_result[0]
                 if raw_ariva:
-                    # Convierte [{"date": "...", "close": ...}] a [("...", ...)] para compatibilidad
                     if isinstance(raw_ariva[0], dict):
                         ariva_prices_tuples = [(p["date"], p["close"]) for p in raw_ariva if "date" in p and "close" in p]
                     else:
