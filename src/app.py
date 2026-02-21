@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from .config import load_funds_csv
-from .httpclient import build_session
+from .http_client import build_session
 from .portfolio import read_prices_json, write_prices_json_if_changed
 from .utils import setup_logging, json_dumps_canonical
 from .scrapers.ftscraper import scrape_ft_prices
