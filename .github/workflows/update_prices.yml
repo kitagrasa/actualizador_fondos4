@@ -1,18 +1,14 @@
-name: Actualizador Precios
+name: Actualizador Precios Fondos
 
 on:
   schedule:
-    - cron: "0 18 * * 1-5"   # Lunes-Viernes 18:00 UTC (20:00 CET)
+    - cron: "0 18 * * *"   # 1 vez al día, 18:00 UTC (20:00 CET verano / 19:00 invierno)
   workflow_dispatch:
     inputs:
       fullrefresh:
         description: "Backfill completo desde inception (1=sí, 0=no)"
         required: false
         default: "0"
-      loglevel:
-        description: "Nivel de log (INFO / DEBUG)"
-        required: false
-        default: "INFO"
 
 concurrency:
   group: fund-prices
@@ -24,7 +20,7 @@ permissions:
 jobs:
   update:
     runs-on: ubuntu-latest
-    timeout-minutes: 6        # ← CLAVE: mata el job si supera 6 min
+    timeout-minutes: 6
 
     steps:
       - name: Checkout
@@ -42,10 +38,10 @@ jobs:
 
       - name: Run updater
         env:
-          LOGLEVEL:      ${{ github.event.inputs.loglevel || 'INFO' }}
-          FULLREFRESH:   ${{ github.event.inputs.fullrefresh || '0' }}
-          LOOKBACK_DAYS: "14"
-          TZ:            UTC
+          LOGLEVEL:         INFO
+          FULLREFRESH:      ${{ github.event.inputs.fullrefresh || '0' }}
+          LOOKBACK_DAYS:    "14"
+          TZ:               UTC
           PYTHONUNBUFFERED: "1"
         run: python -m src.app
 
