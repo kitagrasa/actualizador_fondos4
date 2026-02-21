@@ -117,9 +117,9 @@ def main() -> int:
     if cleanup_removed_funds([f.isin for f in funds], meta):
         any_changed = True
 
-    fullrefresh  = os.getenv("FULLREFRESH", "0").strip() == "1"
+    fullrefresh   = os.getenv("FULLREFRESH", "0").strip() == "1"
     lookback_days = int(os.getenv("LOOKBACK_DAYS", "14"))
-    today        = date.today()
+    today         = date.today()
 
     for f in funds:
         isin = f.isin
@@ -157,7 +157,7 @@ def main() -> int:
 
         # ── Investing ────────────────────────────────────────────────────────
         cached_pair_id = fmeta.get("investing_pair_id") or None
-        inv_prices, inv_pair_id = scrape_investing_prices(
+        inv_result = scrape_investing_prices(
             session,
             f.investing_url,
             cached_pair_id=cached_pair_id,
@@ -165,6 +165,12 @@ def main() -> int:
             enddate=today,
             fullrefresh=do_full,
         )
+        # Compatibilidad: admite tanto (prices, pair_id) como solo prices
+        if isinstance(inv_result, tuple) and len(inv_result) == 2:
+            inv_prices, inv_pair_id = inv_result
+        else:
+            inv_prices, inv_pair_id = (inv_result or []), None
+
         if inv_pair_id and fmeta.get("investing_pair_id") != inv_pair_id:
             fmeta["investing_pair_id"] = inv_pair_id
             any_changed = True
@@ -180,17 +186,17 @@ def main() -> int:
 
         # ── Metadata ─────────────────────────────────────────────────────────
         for key, val in [
-            ("ft_url",          f.ft_url),
-            ("fundsquare_url",  f.fundsquare_url),
-            ("investing_url",   f.investing_url),
+            ("ft_url",         f.ft_url),
+            ("fundsquare_url", f.fundsquare_url),
+            ("investing_url",  f.investing_url),
         ]:
             if val and fmeta.get(key) != val:
                 fmeta[key] = val
                 any_changed = True
 
         for key, val in [
-            ("name",     ft_meta.get("name")),
-            ("currency", ft_meta.get("currency")),
+            ("name",     ft_meta.get("name") if isinstance(ft_meta, dict) else None),
+            ("currency", ft_meta.get("currency") if isinstance(ft_meta, dict) else None),
         ]:
             if val and fmeta.get(key) != val:
                 fmeta[key] = val
