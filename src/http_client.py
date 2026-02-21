@@ -11,14 +11,13 @@ def build_session() -> requests.Session:
         total=3,
         backoff_factor=0.8,
         status_forcelist=(429, 500, 502, 503, 504),
-        allowed_methods=("GET",),
+        allowed_methods=("GET", "POST"),   # ← añadido POST
         raise_on_status=False,
     )
     adapter = HTTPAdapter(max_retries=retries, pool_connections=10, pool_maxsize=10)
     s.mount("http://", adapter)
     s.mount("https://", adapter)
 
-    # Headers “de navegador” para reducir bloqueos/bot-detection.
     s.headers.update(
         {
             "User-Agent": (
