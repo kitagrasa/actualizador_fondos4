@@ -2,17 +2,13 @@ name: Actualizador Precios Fondos
 
 on:
   schedule:
-    - cron: "0 0 * * *"   # 1 vez/día a medianoche UTC (fallback)
+    - cron: "2,21,40,59 * * * *"
   workflow_dispatch:
     inputs:
       log_level:
-        description: "Nivel de logs"
+        description: "Nivel de log (DEBUG o INFO)"
         required: false
         default: "INFO"
-      full_refresh:
-        description: "Backfill completo (1=si)"
-        required: false
-        default: "0"
 
 concurrency:
   group: fund-prices
@@ -25,7 +21,6 @@ jobs:
   update:
     runs-on: ubuntu-latest
     timeout-minutes: 6
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -42,19 +37,18 @@ jobs:
 
       - name: Run updater
         env:
-          LOG_LEVEL: ${{ inputs.log_level || 'INFO' }}
-          FULL_REFRESH: ${{ inputs.full_refresh || '0' }}
+          LOGLEVEL: ${{ github.event.inputs.log_level || 'INFO' }}
           TZ: UTC
-          PYTHONUNBUFFERED: "1"
+          PYTHONUNBUFFERED: 1
         run: python -m src.app
 
       - name: Commit & push if changed
         run: |
           git config user.name "Fund Prices Bot"
           git config user.email "actions@github.com"
-          git add data/prices data/funds_metadata.json || true
+          git add data/prices data/funds-metadata.json || true
           if git diff --cached --quiet; then
-            echo "Sin cambios: no se hace commit."
+            echo "Sin cambios, no se hace commit."
           else
             git commit -m "chore: update fund prices"
             git push
