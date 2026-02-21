@@ -18,7 +18,9 @@ _UA = (
     "(KHTML, like Gecko) Chrome/122.0 Safari/537.36"
 )
 
-# Señales fuertes de challenge (best-effort)
+# Señales "fuertes" de challenge (best-effort).
+# OJO: Investing a veces incluye cadenas “sospechosas” aunque el HTML traiga datos;
+# por eso solo hacemos WARNING si NO hay señales claras de tabla/datos.
 _BLOCK_MARKERS = [
     "/cdn-cgi/challenge-platform",
     "cf-turnstile",
@@ -58,9 +60,16 @@ def _fetch_html(session, investing_url: str) -> Optional[str]:
             log.warning("Investing HTML: demasiado corto (len=%s) url=%s", len(html), investing_url)
             return None
 
-        # No “castigamos” si hay markers pero viene la tabla. Solo warning si parece challenge Y no hay currtable.
-        has_currtable_hint = ('id="currtable"' in html) or ("id=currtable" in html)
-        if _looks_blocked(html) and not has_currtable_hint:
+        # Evitar falsos positivos: si hay indicios claros de tabla/datos, no hagas WARNING aunque haya markers.
+        low = html.lower()
+        has_useful_hint = (
+            ("currtable" in low)
+            or ("historicaltbl" in low)
+            or ("data-real-value" in low)
+            or ("data-pair-id" in low)
+        )
+
+        if _looks_blocked(html) and not has_useful_hint:
             log.warning(
                 "Investing HTML: parece bloqueado/challenge url=%s (len=%s)",
                 investing_url, len(html),
@@ -72,20 +81,18 @@ def _fetch_html(session, investing_url: str) -> Optional[str]:
         return None
 
 
-# ── Extraer pair_id / sml_id desde el HTML (para cache / AJAX) ───────────────
-# IMPORTANTE: regex SIN doble-escape; el HTML real incluye:
-#   window.histDataExcessInfo pairId 1036800, smlId 25737662
-# [file:299]
+# ── Extraer pair_id / sml_id ────────────────────────────────────────────────
 
 _RE_HISTINFO = re.compile(
     r"histDataExcessInfo.*?pairId\s*(?:[:=]\s*)?(?P<pair>\d{3,10}).*?smlId\s*(?:[:=]\s*)?(?P<sml>\d{3,12})",
     re.I | re.S,
 )
 _RE_PAIRID_GENERIC = re.compile(r"\bpairId\b\s*(?:[:=]\s*)?(\d{3,10})", re.I)
+_RE_DATALAYER_INSTRUMENTID = re.compile(r"\binstrumentid\s*(?:[:=]\s*)?(\d{3,12})", re.I)
 _RE_DATA_PAIR_ID = re.compile(r"\bdata-pair-id\b\s*=\s*['\"]?(\d{3,10})", re.I)
 
 
-def _extract_pair_and_sml(html: str) -> Tuple[Optional[str], Optional[str]]:
+def _extract_pair_and_sml(html: str, soup: Optional[BeautifulSoup] = None) -> Tuple[Optional[str], Optional[str]]:
     if not html:
         return None, None
 
@@ -93,10 +100,28 @@ def _extract_pair_and_sml(html: str) -> Tuple[Optional[str], Optional[str]]:
     if m:
         return m.group("pair"), m.group("sml")
 
+    # 1) En muchos fondos aparece como data-pair-id en el DOM principal
+    try:
+        if soup is not None:
+            node = soup.select_one("div.instrumentHead [data-pair-id]") or soup.select_one("[data-pair-id]")
+            if node:
+                pid = (node.get("data-pair-id") or "").strip()
+                if pid.isdigit():
+                    return pid, None
+    except Exception:
+        pass
+
+    # 2) dataLayer.push('instrumentId1036800') o variantes
+    m0 = _RE_DATALAYER_INSTRUMENTID.search(html)
+    if m0 and m0.group(1).isdigit():
+        return m0.group(1), None
+
+    # 3) pairId suelto
     m2 = _RE_PAIRID_GENERIC.search(html)
     if m2:
         return m2.group(1), None
 
+    # 4) data-pair-id suelto en HTML
     m3 = _RE_DATA_PAIR_ID.search(html)
     if m3:
         return m3.group(1), None
@@ -104,43 +129,83 @@ def _extract_pair_and_sml(html: str) -> Tuple[Optional[str], Optional[str]]:
     return None, None
 
 
-# ── Parse de tabla HTML (#currtable) ─────────────────────────────────────────
-# En el HTML real: table#currtable + td[0] epoch + td[1] último con data-real-value [file:299]
+# ── Parse tabla HTML (#currtable) ───────────────────────────────────────────
 
-def _parse_currtable_from_soup(soup: BeautifulSoup) -> List[Tuple[str, float]]:
-    table = soup.select_one("table#currtable") or soup.select_one("table.historicalTbl#currtable")
-    if not table:
+def _epoch_to_date_iso(epoch_str: str) -> Optional[str]:
+    s = (epoch_str or "").strip()
+    if not s.isdigit():
+        return None
+    try:
+        n = int(s)
+        # seconds vs ms
+        if n > 10_000_000_000:
+            n = n // 1000
+        return datetime.utcfromtimestamp(n).date().isoformat()
+    except Exception:
+        return None
+
+
+def _find_hist_table(soup: BeautifulSoup):
+    # Orden: lo más específico primero
+    t = soup.select_one("table#currtable")
+    if t:
+        return t
+    t = soup.find("table", id=re.compile(r"currtable", re.I))
+    if t:
+        return t
+    # Fallbacks frecuentes
+    t = soup.select_one("table.historicalTbl")
+    if t:
+        return t
+    t = soup.select_one("table.genTbl.historicalTbl")
+    if t:
+        return t
+    return None
+
+
+def _parse_html_currtable(html: str) -> List[Tuple[str, float]]:
+    """
+    Extrae (YYYY-MM-DD, close) desde la tabla renderizada en la propia página.
+
+    IMPORTANTE: NO dependemos de <tbody>, porque a veces no existe en el HTML servido.
+    """
+    if not html:
         return []
 
-    out: List[Tuple[str, float]] = []
-    for tr in table.select("tbody tr"):
-        tds = tr.find_all("td")
-        if len(tds) < 2:
-            continue
+    try:
+        soup = BeautifulSoup(html, "lxml")
+        table = _find_hist_table(soup)
+        if not table:
+            return []
 
-        # Fecha
-        d_iso: Optional[str] = None
-        epoch = (tds[0].get("data-real-value") or "").strip()
-        if epoch.isdigit():
+        out: List[Tuple[str, float]] = []
+
+        # No asumir <tbody>: coger todos los tr y filtrar por td>=2
+        for tr in table.find_all("tr"):
+            tds = tr.find_all("td")
+            if len(tds) < 2:
+                continue
+
+            # Fecha
+            d_iso = _epoch_to_date_iso((tds[0].get("data-real-value") or "").strip())
+            if not d_iso:
+                try:
+                    d_iso = datetime.strptime(tds[0].get_text(strip=True), "%d.%m.%Y").date().isoformat()
+                except Exception:
+                    continue
+
+            # Close (Último)
+            raw = tds[1].get("data-real-value") or tds[1].get_text(strip=True)
             try:
-                d_iso = datetime.utcfromtimestamp(int(epoch)).date().isoformat()
-            except Exception:
-                d_iso = None
-        if not d_iso:
-            try:
-                d_iso = datetime.strptime(tds[0].get_text(strip=True), "%d.%m.%Y").date().isoformat()
+                out.append((d_iso, parse_float(str(raw))))
             except Exception:
                 continue
 
-        # Último
-        raw = tds[1].get("data-real-value") or tds[1].get_text(strip=True)
-        try:
-            out.append((d_iso, parse_float(str(raw))))
-        except Exception:
-            continue
-
-    out.sort(key=lambda x: x[0])
-    return out
+        out.sort(key=lambda x: x[0])
+        return out
+    except Exception as e:
+        log.debug("Investing: error parseando tabla HTML: %s", e)
+        return []
 
 
 def _filter_range(rows: List[Tuple[str, float]], start: date, end: date) -> List[Tuple[str, float]]:
@@ -157,7 +222,7 @@ def _filter_range(rows: List[Tuple[str, float]], start: date, end: date) -> List
     return out
 
 
-# ── HistoricalDataAjax (puede dar 403 en Actions) ────────────────────────────
+# ── HistoricalDataAjax (fallback / full refresh) ────────────────────────────
 
 def _ajax_post(
     session,
@@ -217,18 +282,13 @@ def _parse_ajax_fragment(html_fragment: str) -> List[Tuple[str, float]]:
     try:
         soup = BeautifulSoup(f"<table><tbody>{html_fragment}</tbody></table>", "lxml")
         out: List[Tuple[str, float]] = []
+
         for tr in soup.select("tr"):
             tds = tr.find_all("td")
             if len(tds) < 2:
                 continue
 
-            d_iso: Optional[str] = None
-            epoch = (tds[0].get("data-real-value") or "").strip()
-            if epoch.isdigit():
-                try:
-                    d_iso = datetime.utcfromtimestamp(int(epoch)).date().isoformat()
-                except Exception:
-                    d_iso = None
+            d_iso = _epoch_to_date_iso((tds[0].get("data-real-value") or "").strip())
             if not d_iso:
                 try:
                     d_iso = datetime.strptime(tds[0].get_text(strip=True), "%d.%m.%Y").date().isoformat()
@@ -241,6 +301,7 @@ def _parse_ajax_fragment(html_fragment: str) -> List[Tuple[str, float]]:
             except Exception:
                 continue
 
+        out.sort(key=lambda x: x[0])
         return out
     except Exception as e:
         log.debug("Investing: error parseando fragmento AJAX: %s", e)
@@ -257,7 +318,7 @@ def _date_chunks(start: date, end: date, months: int) -> List[Tuple[date, date]]
     return chunks
 
 
-# ── Entry point ───────────────────────────────────────────────────────────────
+# ── Entry point ─────────────────────────────────────────────────────────────
 
 def scrape_investing_prices(
     session,
@@ -268,8 +329,11 @@ def scrape_investing_prices(
     full_refresh: bool = False,
 ) -> Tuple[List[Tuple[str, float]], Optional[str]]:
     """
-    - Incremental: usa tabla HTML (#currtable) y listo.
-    - Full refresh: intenta AJAX; si falla (403), vuelve a tabla HTML.
+    Estrategia robusta (Actions-friendly):
+      1) GET HTML y parse de tabla (#currtable) SIN depender de <tbody>.
+      2) Extraer pair_id/sml_id del HTML para cachear.
+      3) Si tabla vacía: fallback AJAX (1 intento) para el rango incremental.
+      4) Si full_refresh=True: AJAX por chunks; si falla, devuelve lo de la tabla.
     """
     if not investing_url:
         return [], None
@@ -281,22 +345,36 @@ def scrape_investing_prices(
     if not html:
         return [], None
 
-    # Una sola pasada de parseo
-    soup = BeautifulSoup(html, "lxml")
-
-    # 1) Tabla HTML (más estable en Actions)
-    table_rows = _parse_currtable_from_soup(soup)
+    # Parse tabla HTML (más estable)
+    table_rows = _parse_html_currtable(html)
     table_rows = _filter_range(table_rows, start, end)
 
-    # 2) pair_id/sml_id para cache / AJAX
-    pair_id_html, sml_id = _extract_pair_and_sml(html)
+    # Extraer pair_id/sml_id para cache / AJAX
+    soup: Optional[BeautifulSoup] = None
+    try:
+        soup = BeautifulSoup(html, "lxml")
+    except Exception:
+        soup = None
+
+    pair_id_html, sml_id = _extract_pair_and_sml(html, soup=soup)
     pair_id = (cached_pair_id or "").strip() or pair_id_html
 
+    # Si hay tabla y NO es full refresh, terminamos (incremental)
     if table_rows and not full_refresh:
         log.info("Investing: %s precios (tabla HTML) para %s", len(table_rows), investing_url)
         return table_rows, pair_id
 
-    # 3) Full refresh (best-effort)
+    # Si la tabla vino vacía, prueba 1 AJAX “rápido” incluso sin full_refresh (soluciona casos sin currtable).
+    if (not table_rows) and pair_id and pair_id.isdigit():
+        frag = _ajax_post(session, pair_id, start, end, investing_url, sml_id=sml_id)
+        if frag:
+            ajax_rows = _parse_ajax_fragment(frag)
+            ajax_rows = _filter_range(ajax_rows, start, end)
+            if ajax_rows:
+                log.info("Investing: %s precios (AJAX fallback) para %s", len(ajax_rows), investing_url)
+                return ajax_rows, pair_id
+
+    # Full refresh: AJAX por chunks (best-effort)
     if full_refresh and pair_id and pair_id.isdigit():
         collected: Dict[str, float] = {}
         for s, e in _date_chunks(start, end, months=12):
@@ -311,6 +389,7 @@ def scrape_investing_prices(
             log.info("Investing: %s precios (AJAX) pair_id=%s para %s", len(out), pair_id, investing_url)
             return out, pair_id
 
+        # Si AJAX no da nada, devuelve lo que tengas de la tabla (aunque sea vacío)
         if table_rows:
             log.warning(
                 "Investing: AJAX sin datos (posible 403/bloqueo). Usando tabla HTML (%s filas) para %s",
@@ -318,12 +397,12 @@ def scrape_investing_prices(
             )
             return table_rows, pair_id
 
-        log.warning("Investing: sin datos por AJAX ni tabla HTML para %s (pair_id=%s).", investing_url, pair_id)
+        log.warning("Investing: sin datos por AJAX ni por tabla HTML para %s (pair_id=%s).", investing_url, pair_id)
         return [], pair_id
 
-    # Si no hay tabla y no podemos/queremos AJAX
+    # No full_refresh y no hay nada
     if not table_rows:
-        log.warning("Investing: tabla HTML vacía/no encontrada para %s", investing_url)
+        log.warning("Investing: tabla HTML vacía/no encontrada para %s.", investing_url)
         return [], pair_id
 
     return table_rows, pair_id
