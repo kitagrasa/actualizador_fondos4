@@ -8,21 +8,23 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from .config import load_funds_csv
-from .http_client import build_session
+from .httpclient import build_session
 from .portfolio import read_prices_json, write_prices_json_if_changed
 from .utils import setup_logging, json_dumps_canonical
-from .scrapers.ft_scraper import scrape_ft_prices
-from .scrapers.fundsquare_scraper import scrape_fundsquare_prices
-from .scrapers.investing_scraper import scrape_investing_prices
+from .scrapers.ftscraper import scrape_ft_prices
+from .scrapers.fundsquarescraper import scrape_fundsquare_prices
+from .scrapers.investingscraper import scrape_investing_prices
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = ROOT / "data"
 PRICES_DIR = DATA_DIR / "prices"
-META_FILE = DATA_DIR / "funds_metadata.json"
+META_FILE = DATA_DIR / "fundsmetadata.json"
 FUNDS_CSV = ROOT / "funds.csv"
 
 log = logging.getLogger("app")
 
+
+# ── Metadata ──────────────────────────────────────────────────────────────────
 
 def load_metadata() -> Dict:
     if not META_FILE.exists():
@@ -48,6 +50,8 @@ def save_metadata_if_changed(meta: Dict) -> bool:
     return True
 
 
+# ── Limpieza de fondos eliminados ─────────────────────────────────────────────
+
 def cleanup_removed_funds(active_isins: List[str], meta: Dict) -> bool:
     changed = False
     active = set(active_isins)
@@ -55,27 +59,29 @@ def cleanup_removed_funds(active_isins: List[str], meta: Dict) -> bool:
     for p in PRICES_DIR.glob("*.json"):
         isin = p.stem.strip()
         if isin and isin not in active:
-            log.info("Borrando histórico de fondo eliminado: %s", isin)
+            log.info("Borrando histórico de fondo eliminado %s", isin)
             try:
                 p.unlink()
                 changed = True
             except Exception as e:
                 log.error("No se pudo borrar %s: %s", p, e)
     funds_meta = meta.get("funds", {})
-    for isin in [k for k in list(funds_meta) if k not in active]:
-        log.info("Eliminando metadata de fondo eliminado: %s", isin)
-        funds_meta.pop(isin, None)
-        changed = True
+    for isin in list(funds_meta.keys()):
+        if isin not in active:
+            log.info("Eliminando metadata de fondo eliminado %s", isin)
+            funds_meta.pop(isin, None)
+            changed = True
     meta["funds"] = funds_meta
     return changed
 
 
-def merge_updates(existing: Dict[str, float], *sources: List[Tuple[str, float]]) -> Dict[str, float]:
-    """
-    Fusiona existing con todas las fuentes.
-    Cada fuente sobrescribe la fecha si el precio es diferente
-    (independientemente de qué web lo obtuvo).
-    """
+# ── Fusión de fuentes ─────────────────────────────────────────────────────────
+
+def merge_updates(
+    existing: Dict[str, float],
+    *sources: List[Tuple[str, float]],
+) -> Dict[str, float]:
+    """Fusiona existing con todas las fuentes. Cada fuente sobrescribe por fecha."""
     out = dict(existing)
     for source in sources:
         for d, c in source:
@@ -83,14 +89,16 @@ def merge_updates(existing: Dict[str, float], *sources: List[Tuple[str, float]])
     return out
 
 
-def _max_existing_date(existing: Dict[str, float]) -> Optional[date]:
+def max_existing_date(existing: Dict[str, float]) -> Optional[date]:
     if not existing:
         return None
     try:
-        return max(datetime.strptime(d, "%Y-%m-%d").date() for d in existing)
+        return max(datetime.strptime(d, "%Y-%m-%d").date() for d in existing.keys())
     except Exception:
         return None
 
+
+# ── Main ──────────────────────────────────────────────────────────────────────
 
 def main() -> int:
     setup_logging()
@@ -108,45 +116,77 @@ def main() -> int:
     if cleanup_removed_funds([f.isin for f in funds], meta):
         any_changed = True
 
-    full_refresh = os.getenv("FULL_REFRESH", "0").strip() == "1"
+    full_refresh = os.getenv("FULLREFRESH", "0").strip() == "1"
     lookback_days = int(os.getenv("LOOKBACK_DAYS", "14"))
     today = date.today()
 
     for f in funds:
         isin = f.isin
-        log.info("Procesando %s | FT=%s | FS=%s | INV=%s",
-                 isin, f.ft_url or "—", f.fundsquare_url or "—", f.investing_url or "—")
+        log.info(
+            "Procesando %s | FT=%s | FS=%s | INV=%s",
+            isin,
+            f.ft_url or "—",
+            f.fundsquare_url or "—",
+            f.investing_url or "—",
+        )
 
         existing_path = PRICES_DIR / f"{isin}.json"
         existing = read_prices_json(existing_path)
+        last_dt = max_existing_date(existing)
+        funds_meta = meta.setdefault("funds", {})
+        fmeta = funds_meta.setdefault(isin, {})
 
-        last_dt = _max_existing_date(existing)
-        do_full = full_refresh or (not existing)
-        start = (max(date(2000, 1, 1), last_dt - timedelta(days=lookback_days))
-                 if (not do_full and last_dt) else None)
+        do_full = full_refresh or not existing
+        start = (
+            max(date(2000, 1, 1), last_dt - timedelta(days=lookback_days))
+            if not do_full and last_dt
+            else None
+        )
 
+        # ── FT ──────────────────────────────────────────────────────────────
         ft_prices, ft_meta = scrape_ft_prices(
-            session, f.ft_url, start_date=start, end_date=today, full_refresh=do_full)
-        fs_prices = scrape_fundsquare_prices(session, f.fundsquare_url)
-        inv_prices = scrape_investing_prices(
-            session, f.investing_url, start_date=start, end_date=today, full_refresh=do_full)
+            session, f.ft_url,
+            start_date=start, end_date=today, full_refresh=do_full,
+        )
 
+        # ── Fundsquare ───────────────────────────────────────────────────────
+        fs_prices = scrape_fundsquare_prices(session, f.fundsquare_url)
+
+        # ── Investing.com ────────────────────────────────────────────────────
+        # Lee pair_id cacheado del metadata para evitar el fetch HTML
+        cached_pair_id = fmeta.get("investing_pair_id") or None
+        inv_prices, inv_pair_id = scrape_investing_prices(
+            session, f.investing_url,
+            cached_pair_id=cached_pair_id,
+            start_date=start, end_date=today, full_refresh=do_full,
+        )
+        # Cachear pair_id si lo obtuvimos y no estaba guardado
+        if inv_pair_id and fmeta.get("investing_pair_id") != inv_pair_id:
+            fmeta["investing_pair_id"] = inv_pair_id
+            any_changed = True
+
+        # ── Merge y guardado ─────────────────────────────────────────────────
         merged = merge_updates(existing, ft_prices, fs_prices, inv_prices)
 
         if write_prices_json_if_changed(existing_path, merged):
-            log.info("Actualizado %s (%s puntos)", isin, len(merged))
+            log.info("Actualizado %s → %s puntos", isin, len(merged))
             any_changed = True
         else:
             log.info("Sin cambios en %s", isin)
 
-        # Metadata
-        fmeta = meta.setdefault("funds", {}).setdefault(isin, {})
-        for key, val in [("ft_url", f.ft_url), ("fundsquare_url", f.fundsquare_url),
-                         ("investing_url", f.investing_url)]:
+        # Metadata del fondo (nombre, moneda, URLs)
+        for key, val in [
+            ("ft_url", f.ft_url),
+            ("fundsquare_url", f.fundsquare_url),
+            ("investing_url", f.investing_url),
+        ]:
             if val and fmeta.get(key) != val:
                 fmeta[key] = val
                 any_changed = True
-        for key, val in [("name", ft_meta.get("name")), ("currency", ft_meta.get("currency"))]:
+        for key, val in [
+            ("name", ft_meta.get("name")),
+            ("currency", ft_meta.get("currency")),
+        ]:
             if val and fmeta.get(key) != val:
                 fmeta[key] = val
                 any_changed = True
