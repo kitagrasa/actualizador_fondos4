@@ -6,12 +6,6 @@ from urllib3.util.retry import Retry
 
 
 def build_session() -> requests.Session:
-    """
-    Sesión HTTP compartida con:
-      - Pool de conexiones
-      - Retries para GET y POST (importante para Investing HistoricalDataAjax)
-      - Cabeceras "browser-like" genéricas
-    """
     s = requests.Session()
 
     retries = Retry(
@@ -28,8 +22,6 @@ def build_session() -> requests.Session:
     s.mount("http://", adapter)
     s.mount("https://", adapter)
 
-    # Cabeceras globales genéricas.
-    # Nota: los scrapers pueden/ deben sobrescribir Referer/Origin por request según el dominio.
     s.headers.update(
         {
             "User-Agent": (
