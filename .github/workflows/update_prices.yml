@@ -1,4 +1,4 @@
-name: Actualizador Precios Fondos
+name: Actualizador Precios
 
 on:
   schedule:
