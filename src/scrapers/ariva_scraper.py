@@ -1,5 +1,5 @@
 """
-scrapers/ariva.py
+scrapers/ariva_scraper.py
 
 Scraper para páginas 'historische Kurse' de ariva.de
 Columna en funds: URL completa tipo:
