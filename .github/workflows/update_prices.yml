@@ -2,8 +2,17 @@ name: Actualizador Precios
 
 on:
   schedule:
-    - cron: "*/19 * * * *"   # UTC
-  workflow_dispatch: {}
+    - cron: "0 18 * * 1-5"   # Lunes-Viernes 18:00 UTC (20:00 CET)
+  workflow_dispatch:
+    inputs:
+      fullrefresh:
+        description: "Backfill completo desde inception (1=sí, 0=no)"
+        required: false
+        default: "0"
+      loglevel:
+        description: "Nivel de log (INFO / DEBUG)"
+        required: false
+        default: "INFO"
 
 concurrency:
   group: fund-prices
@@ -15,7 +24,7 @@ permissions:
 jobs:
   update:
     runs-on: ubuntu-latest
-    timeout-minutes: 6
+    timeout-minutes: 6        # ← CLAVE: mata el job si supera 6 min
 
     steps:
       - name: Checkout
@@ -33,15 +42,16 @@ jobs:
 
       - name: Run updater
         env:
-          LOG_LEVEL: DEBUG
-          TZ: UTC
+          LOGLEVEL:      ${{ github.event.inputs.loglevel || 'INFO' }}
+          FULLREFRESH:   ${{ github.event.inputs.fullrefresh || '0' }}
+          LOOKBACK_DAYS: "14"
+          TZ:            UTC
           PYTHONUNBUFFERED: "1"
-        run: |
-          python -m src.app
+        run: python -m src.app
 
       - name: Commit & push if changed
         run: |
-          git config user.name "Fund Prices Bot"
+          git config user.name  "Fund Prices Bot"
           git config user.email "actions@github.com"
           git add data/prices data/funds_metadata.json || true
           if git diff --cached --quiet; then
