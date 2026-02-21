@@ -43,6 +43,7 @@ jobs:
           LOOKBACK_DAYS:    "14"
           TZ:               UTC
           PYTHONUNBUFFERED: "1"
+          FUNDS_CSV_URL:    ${{ secrets.FUNDS_CSV_URL }}
         run: python -m src.app
 
       - name: Commit & push if changed
