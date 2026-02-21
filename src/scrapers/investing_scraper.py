@@ -29,16 +29,20 @@ BLOCK_MARKERS = [
     "attention required",
 ]
 
-RE_HIST_INFO  = re.compile(
+# ── Regexes (backslashes corregidos) ──────────────────────────────────────
+RE_HIST_INFO = re.compile(
     r"histDataExcessInfo\s*[=:]\s*\{[^}]*?pairId[\"'\s:=]+(?P<pair>\d{3,10})"
     r"(?:[^}]*?smlId[\"'\s:=]+(?P<sml>\d{5,12}))?",
     re.I | re.S,
 )
-RE_PAIRID     = re.compile(r'(?:pair|instrument)[_\-]?[Ii]d["\'\s:=]+(?P<id>\d{3,10})', re.I)
-RE_DATA_PAIR  = re.compile(r'data-pair-id=["\'\s]*(?P<id>\d{3,10})', re.I)
+RE_PAIRID    = re.compile(r'(?:pair|instrument)[_\-]?id["\'\s:=]+(?P<id>\d{3,10})', re.I)
+RE_DATA_PAIR = re.compile(r'data-pair-id=["\']*(?P<id>\d{3,10})', re.I)
+
+# ── TVC hosts (más fiables en GitHub Actions que AJAX) ────────────────────
+TVC_HOSTS = ["tvc6.investing.com", "tvc4.investing.com", "tvc2.investing.com"]
 
 
-# ── Helpers ────────────────────────────────────────────────────────────────
+# ── Helpers generales ──────────────────────────────────────────────────────
 
 def _build_headers(domain: str, referer: str, accept: str = "text/html,*/*;q=0.8") -> Dict:
     return {
@@ -102,6 +106,8 @@ def _extract_pair_sml(html: str) -> Tuple[Optional[str], Optional[str]]:
     return None, None
 
 
+# ── Parseo tabla HTML (fallback visual) ────────────────────────────────────
+
 def _parse_html_table(html: str) -> List[Tuple[str, float]]:
     if not html:
         return []
@@ -128,7 +134,9 @@ def _parse_html_table(html: str) -> List[Tuple[str, float]]:
                     pass
             if not diso:
                 try:
-                    diso = datetime.strptime(tds[0].get_text(" ", strip=True), "%d.%m.%Y").date().isoformat()
+                    diso = datetime.strptime(
+                        tds[0].get_text(" ", strip=True), "%d.%m.%Y"
+                    ).date().isoformat()
                 except Exception:
                     continue
             raw = tds[1].get("data-real-value") or tds[1].get_text(" ", strip=True)
@@ -143,6 +151,8 @@ def _parse_html_table(html: str) -> List[Tuple[str, float]]:
         return []
 
 
+# ── AJAX (/instruments/HistoricalDataAjax) ─────────────────────────────────
+
 def _post_ajax(
     session,
     investing_url: str,
@@ -155,18 +165,18 @@ def _post_ajax(
     ajax_url = f"https://{domain}/instruments/HistoricalDataAjax"
     headers = _build_headers(domain, investing_url, "application/json, */*;q=0.01")
     headers.update({
-        "Content-Type":    "application/x-www-form-urlencoded; charset=UTF-8",
+        "Content-Type":     "application/x-www-form-urlencoded; charset=UTF-8",
         "X-Requested-With": "XMLHttpRequest",
-        "Origin":          f"https://{domain}",
+        "Origin":           f"https://{domain}",
     })
     data: Dict = {
-        "curr_id":     pairid,
-        "st_date":     st.strftime("%m/%d/%Y"),
-        "end_date":    en.strftime("%m/%d/%Y"),
+        "curr_id":      pairid,
+        "st_date":      st.strftime("%m/%d/%Y"),
+        "end_date":     en.strftime("%m/%d/%Y"),
         "interval_sec": "Daily",
-        "sort_col":    "date",
-        "sort_ord":    "DESC",
-        "action":      "historical_data",
+        "sort_col":     "date",
+        "sort_ord":     "DESC",
+        "action":       "historical_data",
     }
     if smlid and smlid.isdigit():
         data["smlID"] = smlid
@@ -243,22 +253,150 @@ def _chunks_backward(end: date, chunk_days: int, max_chunks: int) -> List[Tuple[
     return chunks
 
 
+# ── TVC (tvc6/tvc4/tvc2.investing.com/history) ────────────────────────────
+
+def _date_to_ts(d: date) -> int:
+    """Fin del día en UNIX timestamp."""
+    return int(datetime(d.year, d.month, d.day, 23, 59, 59).timestamp())
+
+
+def _date_from_ts(d: date) -> int:
+    """Inicio del día en UNIX timestamp."""
+    return int(datetime(d.year, d.month, d.day, 0, 0, 0).timestamp())
+
+
+def _fetch_tvc(
+    session,
+    pairid: str,
+    start_date: date,
+    end_date: date,
+    referer: str,
+) -> List[Tuple[str, float]]:
+    """
+    Obtiene histórico via TVC (más fiable que AJAX en GitHub Actions).
+    Prueba tvc6 → tvc4 → tvc2 en orden.
+    Respuesta JSON: {s:"ok", t:[ts,...], c:[close,...]}
+    """
+    from_ts = _date_from_ts(start_date)
+    to_ts   = _date_to_ts(end_date)
+    ts_now  = int(time.time())
+
+    headers = {
+        "User-Agent":      UA,
+        "Accept":          "application/json, text/javascript, */*; q=0.01",
+        "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
+        "Origin":          "https://es.investing.com",
+        "Referer":         referer,
+        "Connection":      "keep-alive",
+    }
+
+    for host in TVC_HOSTS:
+        url = (
+            f"https://{host}/{ts_now}/{ts_now}/1/1/8/history"
+            f"?symbol={pairid}&resolution=D&from={from_ts}&to={to_ts}"
+        )
+        try:
+            r = session.get(url, headers=headers, timeout=20)
+            if r.status_code != 200:
+                log.debug("TVC %s status=%s pairid=%s", host, r.status_code, pairid)
+                continue
+            data = r.json()
+            if not isinstance(data, dict):
+                continue
+            status = data.get("s", "")
+            if status == "no_data":
+                log.debug("TVC no_data host=%s pairid=%s", host, pairid)
+                return []
+            if status != "ok":
+                log.debug("TVC status inesperado=%s host=%s pairid=%s", status, host, pairid)
+                continue
+            t_list = data.get("t") or []
+            c_list = data.get("c") or []
+            if not t_list or not c_list:
+                continue
+            out: List[Tuple[str, float]] = []
+            for ts, close in zip(t_list, c_list):
+                try:
+                    d = datetime.utcfromtimestamp(int(ts)).date().isoformat()
+                    out.append((d, float(close)))
+                except Exception:
+                    continue
+            if out:
+                out.sort(key=lambda x: x[0])
+                log.info(
+                    "TVC: %s precios (%s→%s) pairid=%s host=%s",
+                    len(out), out[0][0], out[-1][0], pairid, host,
+                )
+                return out
+        except Exception as e:
+            log.debug("TVC error host=%s pairid=%s %s", host, pairid, e)
+            continue
+
+    log.warning("TVC: sin datos en ningún host para pairid=%s", pairid)
+    return []
+
+
+def _fetch_tvc_full(
+    session,
+    pairid: str,
+    end_date: date,
+    referer: str,
+) -> List[Tuple[str, float]]:
+    """
+    Obtiene todo el histórico disponible via TVC.
+    1) Intenta una sola petición desde 2000-01-01 (muchos instrumentos lo devuelven todo).
+    2) Si no, chunking de 3 años hacia atrás hasta 2 chunks vacíos consecutivos.
+    """
+    min_date = date(2000, 1, 1)
+
+    # Intento único con rango completo
+    rows = _fetch_tvc(session, pairid, min_date, end_date, referer)
+    if rows:
+        return rows
+
+    # Chunking hacia atrás
+    collected: Dict[str, float] = {}
+    cur_end = end_date
+    chunk_days = 365 * 3
+    empty_streak = 0
+
+    while cur_end > min_date and empty_streak < 2:
+        cur_start = max(min_date, cur_end - timedelta(days=chunk_days - 1))
+        chunk_rows = _fetch_tvc(session, pairid, cur_start, cur_end, referer)
+        if chunk_rows:
+            for d, c in chunk_rows:
+                collected[d] = c
+            empty_streak = 0
+            earliest = min(chunk_rows, key=lambda x: x[0])[0]
+            if earliest > cur_start.isoformat():
+                cur_end = datetime.strptime(earliest, "%Y-%m-%d").date() - timedelta(days=1)
+            else:
+                cur_end = cur_start - timedelta(days=1)
+        else:
+            empty_streak += 1
+            cur_end = cur_start - timedelta(days=1)
+        time.sleep(0.15)
+
+    return sorted(collected.items()) if collected else []
+
+
 # ── Entry point ────────────────────────────────────────────────────────────
 
 def scrape_investing_prices(
     session,
     investing_url: str,
     cached_pairid: Optional[str] = None,
-    cached_pair_id: Optional[str] = None,   # ← COMPATIBILIDAD AÑADIDA
+    cached_pair_id: Optional[str] = None,   # compatibilidad con app.py antiguo
     startdate: Optional[date] = None,
     enddate: Optional[date] = None,
     fullrefresh: bool = False,
 ) -> Tuple[List[Tuple[str, float]], Optional[str]]:
     """
-    Scraper Investing.com robusto para GitHub Actions.
-    Admite cached_pairid (nuevo) o cached_pair_id (antiguo).
+    Scraper Investing.com — 3 capas en orden de fiabilidad:
+      1) /instruments/HistoricalDataAjax  (rápido; a veces bloqueado en Actions)
+      2) tvc6.investing.com/history       (TVC; más fiable en GitHub Actions)
+      3) tabla #curr_table del HTML       (último recurso; solo datos visibles)
     """
-    # Unificamos el parámetro:
     effective_pairid = (cached_pairid or cached_pair_id or "").strip() or None
 
     if not investing_url:
@@ -266,7 +404,7 @@ def scrape_investing_prices(
 
     end = enddate or date.today()
 
-    # 1. GET HTML
+    # ── GET HTML ─────────────────────────────────────────────────────────
     html = _fetch_html(session, investing_url)
     blocked = _looks_blocked(html) if html else True
     if blocked and html:
@@ -284,34 +422,51 @@ def scrape_investing_prices(
     if not pairid:
         rows = _parse_html_table(html) if html else []
         if rows:
-            log.info("Investing: %s precios tabla HTML (sin pairid) para %s", len(rows), investing_url)
+            log.info(
+                "Investing: %s precios tabla HTML (sin pairid) para %s",
+                len(rows), investing_url,
+            )
         else:
             log.warning("Investing: sin pairid y sin tabla HTML para %s", investing_url)
         return rows, None
 
-    # 2. AJAX
+    # ── MODO INCREMENTAL ─────────────────────────────────────────────────
     if not fullrefresh:
         st = startdate or (end - timedelta(days=45))
+
+        # Capa 1: AJAX
         frag = _post_ajax(session, investing_url, pairid, smlid, st, end)
         rows = _parse_ajax_fragment(frag) if frag else []
         if rows:
-            log.info("Investing: %s precios AJAX pairid=%s para %s", len(rows), pairid, investing_url)
+            log.info(
+                "Investing: %s precios AJAX pairid=%s para %s",
+                len(rows), pairid, investing_url,
+            )
             return rows, pairid
-        
+
+        # Capa 2: TVC
+        rows = _fetch_tvc(session, pairid, st, end, investing_url)
+        if rows:
+            return rows, pairid
+
+        # Capa 3: tabla HTML
         rows = _parse_html_table(html) if html else []
         if rows:
-            log.info("Investing: %s precios tabla HTML para %s", len(rows), investing_url)
+            log.info(
+                "Investing: %s precios tabla HTML para %s", len(rows), investing_url,
+            )
         else:
             log.warning(
-                "Investing: 0 precios (AJAX y tabla vacíos) para %s pairid=%s",
+                "Investing: 0 precios (AJAX+TVC+tabla vacíos) para %s pairid=%s",
                 investing_url, pairid,
             )
         return rows, pairid
 
-    # 3. Full refresh
+    # ── MODO FULL REFRESH ────────────────────────────────────────────────
     CHUNK_DAYS = 365 * 3
     MAX_CHUNKS = 20
     collected: Dict[str, float] = {}
+    ajax_ok = False
     empty_streak = 0
 
     for st, en_chunk in _chunks_backward(end, CHUNK_DAYS, MAX_CHUNKS):
@@ -320,6 +475,7 @@ def scrape_investing_prices(
         if rows:
             for d, c in rows:
                 collected[d] = c
+            ajax_ok = True
             empty_streak = 0
         else:
             empty_streak += 1
@@ -335,15 +491,25 @@ def scrape_investing_prices(
         )
         return out, pairid
 
+    # AJAX bloqueado → TVC full refresh
+    if not ajax_ok:
+        log.info(
+            "Investing: AJAX bloqueado → TVC full refresh pairid=%s", pairid,
+        )
+        rows = _fetch_tvc_full(session, pairid, end, investing_url)
+        if rows:
+            return rows, pairid
+
+    # Último fallback: tabla HTML
     rows = _parse_html_table(html) if html else []
     if rows:
         log.warning(
-            "Investing: AJAX sin datos, usando tabla HTML inline (%s filas) para %s pairid=%s",
+            "Investing: AJAX+TVC sin datos, tabla HTML inline (%s filas) para %s pairid=%s",
             len(rows), investing_url, pairid,
         )
     else:
         log.warning(
-            "Investing: sin datos AJAX ni tabla HTML para %s pairid=%s",
+            "Investing: sin datos en ninguna capa para %s pairid=%s",
             investing_url, pairid,
         )
     return rows, pairid
