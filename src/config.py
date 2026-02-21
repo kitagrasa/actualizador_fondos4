@@ -12,6 +12,7 @@ class FundConfig:
     ft_url: str          # Vacío → salta FT
     fundsquare_url: str  # Vacío → salta Fundsquare
     investing_url: str   # Vacío → salta Investing
+    ariva_url: str       # Vacío → salta Ariva
 
 
 def load_funds_csv(path: str | Path) -> List[FundConfig]:
@@ -34,6 +35,7 @@ def load_funds_csv(path: str | Path) -> List[FundConfig]:
                 ft_url=(row.get("ft_url") or "").strip(),
                 fundsquare_url=(row.get("fundsquare_url") or "").strip(),
                 investing_url=(row.get("investing_url") or "").strip(),
+                ariva_url=(row.get("ariva_url") or "").strip(),
             ))
 
     # Deduplicar por ISIN (última línea gana)
