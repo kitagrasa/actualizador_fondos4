@@ -113,12 +113,14 @@ def fetch_ajax_html(session, symbol_numeric: str, start: date, end: date) -> Opt
         if r.status_code != 200:
             return None
         if looks_like_full_html_document(r.text):
+            # ── CORRECCIÓN: r"\s+" en vez de r"\\s+" ──
             sample = re.sub(r"\s+", " ", r.text or "")[:250]
             log.warning("FT AJAX: respuesta HTML (posible bloqueo). Sample: %r", sample)
             return None
         try:
             payload = r.json()
         except Exception as e:
+            # ── CORRECCIÓN: r"\s+" en vez de r"\\s+" ──
             sample = re.sub(r"\s+", " ", r.text or "")[:250]
             log.warning("FT AJAX: JSON inválido %s. Sample: %r", e, sample)
             return None
@@ -161,10 +163,16 @@ def scrape_ft_prices(
 ) -> Tuple[List[Tuple[str, float]], Dict]:
     """
     Scraper FT incremental o full-refresh.
+    - ft_url vacío → retorna silenciosamente sin warning.
     - fullrefresh=False → rango startdate..enddate (incremental)
     - fullrefresh=True  → backfill completo desde inception en chunks anuales
     Devuelve ([(YYYY-MM-DD, close)], metadata_dict)
     """
+    # ── CORRECCIÓN: URL vacía → saltar silenciosamente ────────────────────
+    if not ft_url:
+        return [], {}
+    # ─────────────────────────────────────────────────────────────────────
+
     meta: Dict = {"ft_url_requested": ft_url}
     symbols_to_try = symbol_variants(ft_url) if not ft_url.startswith("http") else []
 
@@ -175,7 +183,7 @@ def scrape_ft_prices(
             symbols_to_try = symbol_variants(m.group(1))
         else:
             symbols_to_try = []
-    
+
     if not symbols_to_try:
         log.warning("FT: no se pudo extraer símbolo de %r", ft_url)
         return [], meta
