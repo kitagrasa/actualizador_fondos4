@@ -9,8 +9,9 @@ from typing import List
 @dataclass(frozen=True)
 class FundConfig:
     isin: str
-    id_instr: str      # Puede estar vacío → se salta Fundsquare, solo FT
-    ft_symbol: str     # Lo que escribe el usuario: "LU0563745743", "AMEE:GER", etc.
+    ft_url: str          # Vacío → salta FT
+    fundsquare_url: str  # Vacío → salta Fundsquare
+    investing_url: str   # Vacío → salta Investing
 
 
 def load_funds_csv(path: str | Path) -> List[FundConfig]:
@@ -25,15 +26,15 @@ def load_funds_csv(path: str | Path) -> List[FundConfig]:
             raise ValueError(f"{path} debe tener al menos la cabecera 'isin'")
 
         for row in reader:
-            isin     = (row.get("isin")      or "").strip()
-            id_instr = (row.get("idInstr")   or "").strip()   # opcional
-            ft_symbol = (row.get("ft_symbol") or "").strip() or isin
-
-            if not isin:          # solo isin es obligatorio
+            isin = (row.get("isin") or "").strip()
+            if not isin:
                 continue
-
-            funds.append(FundConfig(isin=isin, id_instr=id_instr, ft_symbol=ft_symbol))
+            funds.append(FundConfig(
+                isin=isin,
+                ft_url=(row.get("ft_url") or "").strip(),
+                fundsquare_url=(row.get("fundsquare_url") or "").strip(),
+                investing_url=(row.get("investing_url") or "").strip(),
+            ))
 
     # Deduplicar por ISIN (última línea gana)
-    dedup = {f.isin: f for f in funds}
-    return list(dedup.values())
+    return list({f.isin: f for f in funds}.values())
