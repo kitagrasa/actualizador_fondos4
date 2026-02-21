@@ -17,6 +17,14 @@ from ..utils import parse_float, parse_ft_date
 log = logging.getLogger("scrapers.ft_scraper")
 
 
+def _normalize_ft_url(ft_url: str) -> str:
+    """
+    Auto-corrige URLs de FT que apuntan a summary en vez de historical.
+    Ej: /tearsheet/summary? → /tearsheet/historical?
+    """
+    return re.sub(r"/tearsheet/[^/?]+\?", "/tearsheet/historical?", ft_url)
+
+
 def _extract_symbol(ft_url: str) -> Optional[str]:
     """Extrae ?s=SYMBOL de la URL de FT."""
     try:
@@ -76,8 +84,11 @@ def _date_chunks(start: date, end: date, chunk_days: int = 365) -> List[Tuple[da
 def _fetch_ajax_html(session, symbol_numeric: str, start: date, end: date) -> Optional[str]:
     url = "https://markets.ft.com/data/equities/ajax/get-historical-prices"
     params = {"startDate": _to_date_param(start), "endDate": _to_date_param(end), "symbol": symbol_numeric}
-    headers = {"Accept": "application/json, text/javascript, */*; q=0.01",
-               "X-Requested-With": "XMLHttpRequest", "Referer": "https://markets.ft.com/"}
+    headers = {
+        "Accept": "application/json, text/javascript, */*; q=0.01",
+        "X-Requested-With": "XMLHttpRequest",
+        "Referer": "https://markets.ft.com/",
+    }
     try:
         r = session.get(url, params=params, headers=headers, timeout=25)
         log.debug("FT AJAX: status=%s symbol=%s %s..%s", r.status_code, symbol_numeric, start, end)
@@ -121,10 +132,17 @@ def scrape_ft_prices(
     end_date: Optional[date] = None,
     full_refresh: bool = False,
 ) -> Tuple[List[Tuple[str, float]], Dict]:
-    """Acepta la URL completa de FT (con ?s=SYMBOL). Devuelve (prices, meta)."""
+    """Acepta la URL completa de FT. Auto-corrige summary→historical. Devuelve (prices, meta)."""
     meta: Dict = {"url": ft_url}
     if not ft_url:
         return [], meta
+
+    # Auto-corrección: summary → historical
+    ft_url_normalized = _normalize_ft_url(ft_url)
+    if ft_url_normalized != ft_url:
+        log.info("FT: URL corregida automáticamente: %s → %s", ft_url, ft_url_normalized)
+    ft_url = ft_url_normalized
+    meta["url"] = ft_url
 
     end = end_date or date.today()
     try:
