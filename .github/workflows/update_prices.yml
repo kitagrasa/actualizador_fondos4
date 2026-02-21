@@ -9,6 +9,10 @@ on:
         description: "Nivel de log (DEBUG o INFO)"
         required: false
         default: "INFO"
+      full_refresh:
+        description: "Backfill completo (1 = sí, 0 = no)"
+        required: false
+        default: "0"
 
 concurrency:
   group: fund-prices
@@ -21,6 +25,7 @@ jobs:
   update:
     runs-on: ubuntu-latest
     timeout-minutes: 6
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -35,11 +40,15 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Set env vars dinámicos
+        run: |
+          echo "LOGLEVEL=${{ github.event.inputs.log_level || 'INFO' }}" >> $GITHUB_ENV
+          echo "FULLREFRESH=${{ github.event.inputs.full_refresh || '0' }}" >> $GITHUB_ENV
+
       - name: Run updater
         env:
-          LOGLEVEL: ${{ github.event.inputs.log_level || 'INFO' }}
           TZ: UTC
-          PYTHONUNBUFFERED: 1
+          PYTHONUNBUFFERED: "1"
         run: python -m src.app
 
       - name: Commit & push if changed
