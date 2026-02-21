@@ -11,20 +11,18 @@ from .config import load_funds_csv
 from .http_client import build_session
 from .portfolio import read_prices_json, write_prices_json_if_changed
 from .utils import setup_logging, json_dumps_canonical
-from .scrapers.ftscraper import scrape_ft_prices
-from .scrapers.fundsquarescraper import scrape_fundsquare_prices
-from .scrapers.investingscraper import scrape_investing_prices
+from .scrapers.ft_scraper import scrape_ft_prices_and_metadata   # ← guión bajo
+from .scrapers.fundsquare_scraper import scrape_fundsquare_prices # ← guión bajo
+from .scrapers.investing_scraper import scrape_investing_prices   # ← guión bajo
 
-ROOT = Path(__file__).resolve().parents[1]
-DATA_DIR = ROOT / "data"
+ROOT       = Path(__file__).resolve().parents[1]
+DATA_DIR   = ROOT / "data"
 PRICES_DIR = DATA_DIR / "prices"
-META_FILE = DATA_DIR / "fundsmetadata.json"
-FUNDS_CSV = ROOT / "funds.csv"
+META_FILE  = DATA_DIR / "fundsmetadata.json"
+FUNDS_CSV  = ROOT / "funds.csv"
 
 log = logging.getLogger("app")
 
-
-# ── Metadata ──────────────────────────────────────────────────────────────────
 
 def load_metadata() -> Dict:
     if not META_FILE.exists():
@@ -50,8 +48,6 @@ def save_metadata_if_changed(meta: Dict) -> bool:
     return True
 
 
-# ── Limpieza de fondos eliminados ─────────────────────────────────────────────
-
 def cleanup_removed_funds(active_isins: List[str], meta: Dict) -> bool:
     changed = False
     active = set(active_isins)
@@ -75,13 +71,10 @@ def cleanup_removed_funds(active_isins: List[str], meta: Dict) -> bool:
     return changed
 
 
-# ── Fusión de fuentes ─────────────────────────────────────────────────────────
-
 def merge_updates(
     existing: Dict[str, float],
     *sources: List[Tuple[str, float]],
 ) -> Dict[str, float]:
-    """Fusiona existing con todas las fuentes. Cada fuente sobrescribe por fecha."""
     out = dict(existing)
     for source in sources:
         for d, c in source:
@@ -98,8 +91,6 @@ def max_existing_date(existing: Dict[str, float]) -> Optional[date]:
         return None
 
 
-# ── Main ──────────────────────────────────────────────────────────────────────
-
 def main() -> int:
     setup_logging()
     log.info("Inicio actualización")
@@ -109,16 +100,16 @@ def main() -> int:
         log.warning("No hay fondos en funds.csv")
         return 0
 
-    session = build_session()
-    meta = load_metadata()
+    session     = build_session()
+    meta        = load_metadata()
     any_changed = False
 
     if cleanup_removed_funds([f.isin for f in funds], meta):
         any_changed = True
 
-    full_refresh = os.getenv("FULLREFRESH", "0").strip() == "1"
+    full_refresh  = os.getenv("FULLREFRESH", "0").strip() == "1"
     lookback_days = int(os.getenv("LOOKBACK_DAYS", "14"))
-    today = date.today()
+    today         = date.today()
 
     for f in funds:
         isin = f.isin
@@ -131,20 +122,18 @@ def main() -> int:
         )
 
         existing_path = PRICES_DIR / f"{isin}.json"
-        existing = read_prices_json(existing_path)
-        last_dt = max_existing_date(existing)
-        funds_meta = meta.setdefault("funds", {})
-        fmeta = funds_meta.setdefault(isin, {})
+        existing      = read_prices_json(existing_path)
+        last_dt       = max_existing_date(existing)
+        fmeta         = meta.setdefault("funds", {}).setdefault(isin, {})
 
         do_full = full_refresh or not existing
         start = (
             max(date(2000, 1, 1), last_dt - timedelta(days=lookback_days))
-            if not do_full and last_dt
-            else None
+            if not do_full and last_dt else None
         )
 
         # ── FT ──────────────────────────────────────────────────────────────
-        ft_prices, ft_meta = scrape_ft_prices(
+        ft_prices, ft_meta = scrape_ft_prices_and_metadata(
             session, f.ft_url,
             start_date=start, end_date=today, full_refresh=do_full,
         )
@@ -152,15 +141,19 @@ def main() -> int:
         # ── Fundsquare ───────────────────────────────────────────────────────
         fs_prices = scrape_fundsquare_prices(session, f.fundsquare_url)
 
-        # ── Investing.com ────────────────────────────────────────────────────
-        # Lee pair_id cacheado del metadata para evitar el fetch HTML
+        # ── Investing ────────────────────────────────────────────────────────
         cached_pair_id = fmeta.get("investing_pair_id") or None
-        inv_prices, inv_pair_id = scrape_investing_prices(
+        inv_result = scrape_investing_prices(
             session, f.investing_url,
             cached_pair_id=cached_pair_id,
             start_date=start, end_date=today, full_refresh=do_full,
         )
-        # Cachear pair_id si lo obtuvimos y no estaba guardado
+        # Compatibilidad: admite tanto (prices, pair_id) como solo prices
+        if isinstance(inv_result, tuple):
+            inv_prices, inv_pair_id = inv_result
+        else:
+            inv_prices, inv_pair_id = inv_result or [], None
+
         if inv_pair_id and fmeta.get("investing_pair_id") != inv_pair_id:
             fmeta["investing_pair_id"] = inv_pair_id
             any_changed = True
@@ -174,16 +167,11 @@ def main() -> int:
         else:
             log.info("Sin cambios en %s", isin)
 
-        # Metadata del fondo (nombre, moneda, URLs)
+        # Metadata
         for key, val in [
             ("ft_url", f.ft_url),
             ("fundsquare_url", f.fundsquare_url),
             ("investing_url", f.investing_url),
-        ]:
-            if val and fmeta.get(key) != val:
-                fmeta[key] = val
-                any_changed = True
-        for key, val in [
             ("name", ft_meta.get("name")),
             ("currency", ft_meta.get("currency")),
         ]:
