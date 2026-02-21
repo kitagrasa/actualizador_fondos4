@@ -5,24 +5,55 @@ import logging
 import os
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
+from urllib.parse import parse_qs, urlparse
 
 from .config import load_funds_csv
 from .http_client import build_session
 from .portfolio import read_prices_json, write_prices_json_if_changed
 from .utils import setup_logging, json_dumps_canonical
-from .scrapers.ft_scraper import scrape_ft_prices_and_metadata   # ← guión bajo
-from .scrapers.fundsquare_scraper import scrape_fundsquare_prices # ← guión bajo
-from .scrapers.investing_scraper import scrape_investing_prices   # ← guión bajo
 
-ROOT       = Path(__file__).resolve().parents[1]
-DATA_DIR   = ROOT / "data"
+# Importa módulos (no funciones) para no romper por nombres diferentes
+from .scrapers import ft_scraper, fundsquare_scraper, investing_scraper  # type: ignore
+
+ROOT = Path(__file__).resolve().parents[1]
+DATA_DIR = ROOT / "data"
 PRICES_DIR = DATA_DIR / "prices"
-META_FILE  = DATA_DIR / "fundsmetadata.json"
-FUNDS_CSV  = ROOT / "funds.csv"
+META_FILE = DATA_DIR / "fundsmetadata.json"
+FUNDS_CSV = ROOT / "funds.csv"
 
 log = logging.getLogger("app")
 
+
+# ── Helpers ──────────────────────────────────────────────────────────────────
+
+def _resolve_callable(module: Any, names: List[str]) -> Callable:
+    for n in names:
+        fn = getattr(module, n, None)
+        if callable(fn):
+            return fn
+    raise ImportError(f"No se encontró ninguna función válida en {module.__name__}: {names}")
+
+
+def _qs_param(url: str, key: str) -> Optional[str]:
+    try:
+        q = parse_qs(urlparse(url).query)
+        v = q.get(key, [None])[0]
+        return v.strip() if isinstance(v, str) and v.strip() else None
+    except Exception:
+        return None
+
+
+def _extract_ft_symbol_from_url(ft_url: str) -> Optional[str]:
+    # FT tearsheet suele llevar ?s=LUxxxx:EUR o ?s=LUxxxxEUR, etc.
+    return _qs_param(ft_url, "s")
+
+
+def _extract_fundsquare_idinstr_from_url(fs_url: str) -> Optional[str]:
+    return _qs_param(fs_url, "idInstr")
+
+
+# ── Metadata ──────────────────────────────────────────────────────────────────
 
 def load_metadata() -> Dict:
     if not META_FILE.exists():
@@ -48,10 +79,13 @@ def save_metadata_if_changed(meta: Dict) -> bool:
     return True
 
 
+# ── Limpieza ─────────────────────────────────────────────────────────────────
+
 def cleanup_removed_funds(active_isins: List[str], meta: Dict) -> bool:
     changed = False
     active = set(active_isins)
     PRICES_DIR.mkdir(parents=True, exist_ok=True)
+
     for p in PRICES_DIR.glob("*.json"):
         isin = p.stem.strip()
         if isin and isin not in active:
@@ -61,15 +95,19 @@ def cleanup_removed_funds(active_isins: List[str], meta: Dict) -> bool:
                 changed = True
             except Exception as e:
                 log.error("No se pudo borrar %s: %s", p, e)
+
     funds_meta = meta.get("funds", {})
     for isin in list(funds_meta.keys()):
         if isin not in active:
             log.info("Eliminando metadata de fondo eliminado %s", isin)
             funds_meta.pop(isin, None)
             changed = True
+
     meta["funds"] = funds_meta
     return changed
 
+
+# ── Merge ────────────────────────────────────────────────────────────────────
 
 def merge_updates(
     existing: Dict[str, float],
@@ -91,6 +129,8 @@ def max_existing_date(existing: Dict[str, float]) -> Optional[date]:
         return None
 
 
+# ── Main ─────────────────────────────────────────────────────────────────────
+
 def main() -> int:
     setup_logging()
     log.info("Inicio actualización")
@@ -100,16 +140,44 @@ def main() -> int:
         log.warning("No hay fondos en funds.csv")
         return 0
 
-    session     = build_session()
-    meta        = load_metadata()
+    session = build_session()
+    meta = load_metadata()
     any_changed = False
 
     if cleanup_removed_funds([f.isin for f in funds], meta):
         any_changed = True
 
-    full_refresh  = os.getenv("FULLREFRESH", "0").strip() == "1"
+    full_refresh = os.getenv("FULLREFRESH", "0").strip() == "1"
     lookback_days = int(os.getenv("LOOKBACK_DAYS", "14"))
-    today         = date.today()
+    today = date.today()
+
+    # Resolver funciones existentes (soporta nombres antiguos y nuevos)
+    scrape_ft = _resolve_callable(
+        ft_scraper,
+        [
+            "scrape_ft_prices_and_metadata",
+            "scrape_ft_prices",
+            "scrapeftpricesandmetadata",
+            "scrapeftpricesandmetadata_session",  # por si acaso
+            "scrapeftprices",  # por si tu módulo expone solo prices
+        ],
+    )
+
+    scrape_fs = _resolve_callable(
+        fundsquare_scraper,
+        [
+            "scrape_fundsquare_prices",
+            "scrapefundsquareprices",
+        ],
+    )
+
+    scrape_inv = _resolve_callable(
+        investing_scraper,
+        [
+            "scrape_investing_prices",
+            "scrapeinvestingprices",
+        ],
+    )
 
     for f in funds:
         isin = f.isin
@@ -122,41 +190,103 @@ def main() -> int:
         )
 
         existing_path = PRICES_DIR / f"{isin}.json"
-        existing      = read_prices_json(existing_path)
-        last_dt       = max_existing_date(existing)
-        fmeta         = meta.setdefault("funds", {}).setdefault(isin, {})
+        existing = read_prices_json(existing_path)
+        last_dt = max_existing_date(existing)
+
+        fmeta = meta.setdefault("funds", {}).setdefault(isin, {})
 
         do_full = full_refresh or not existing
         start = (
             max(date(2000, 1, 1), last_dt - timedelta(days=lookback_days))
-            if not do_full and last_dt else None
+            if (not do_full and last_dt)
+            else None
         )
 
         # ── FT ──────────────────────────────────────────────────────────────
-        ft_prices, ft_meta = scrape_ft_prices_and_metadata(
-            session, f.ft_url,
-            start_date=start, end_date=today, full_refresh=do_full,
-        )
+        ft_prices: List[Tuple[str, float]] = []
+        ft_meta: Dict[str, Any] = {}
+
+        if f.ft_url:
+            # Intento 1: API nueva (url + kwargs start_date/end_date/full_refresh)
+            try:
+                res = scrape_ft(
+                    session,
+                    f.ft_url,
+                    start_date=start,
+                    end_date=today,
+                    full_refresh=do_full,
+                )
+                if isinstance(res, tuple) and len(res) == 2:
+                    ft_prices, ft_meta = res  # type: ignore[misc]
+                else:
+                    ft_prices = res or []  # type: ignore[assignment]
+            except TypeError:
+                # Intento 2: API vieja (ftsymbol extraído de ?s=... + startdate/enddate/fullrefresh)
+                ftsymbol = _extract_ft_symbol_from_url(f.ft_url) or f.ft_url
+                try:
+                    res = scrape_ft(
+                        session,
+                        ftsymbol,
+                        startdate=start,
+                        enddate=today,
+                        fullrefresh=do_full,
+                    )
+                    if isinstance(res, tuple) and len(res) == 2:
+                        ft_prices, ft_meta = res  # type: ignore[misc]
+                    else:
+                        ft_prices = res or []  # type: ignore[assignment]
+                except Exception as e:
+                    log.warning("FT falló para %s: %s", isin, e)
+            except Exception as e:
+                log.warning("FT falló para %s: %s", isin, e)
 
         # ── Fundsquare ───────────────────────────────────────────────────────
-        fs_prices = scrape_fundsquare_prices(session, f.fundsquare_url)
+        fs_prices: List[Tuple[str, float]] = []
+        if f.fundsquare_url:
+            try:
+                # Intento 1: espera URL completa
+                fs_prices = scrape_fs(session, f.fundsquare_url) or []
+            except TypeError:
+                # Intento 2: espera idInstr
+                idinstr = _extract_fundsquare_idinstr_from_url(f.fundsquare_url)
+                if idinstr:
+                    fs_prices = scrape_fs(session, idinstr) or []
+            except Exception as e:
+                log.warning("Fundsquare falló para %s: %s", isin, e)
 
         # ── Investing ────────────────────────────────────────────────────────
-        cached_pair_id = fmeta.get("investing_pair_id") or None
-        inv_result = scrape_investing_prices(
-            session, f.investing_url,
-            cached_pair_id=cached_pair_id,
-            start_date=start, end_date=today, full_refresh=do_full,
-        )
-        # Compatibilidad: admite tanto (prices, pair_id) como solo prices
-        if isinstance(inv_result, tuple):
-            inv_prices, inv_pair_id = inv_result
-        else:
-            inv_prices, inv_pair_id = inv_result or [], None
+        inv_prices: List[Tuple[str, float]] = []
+        inv_pair_id: Optional[str] = None
 
-        if inv_pair_id and fmeta.get("investing_pair_id") != inv_pair_id:
-            fmeta["investing_pair_id"] = inv_pair_id
-            any_changed = True
+        if f.investing_url:
+            cached_pair_id = fmeta.get("investing_pair_id") or None
+            try:
+                inv_res = scrape_inv(
+                    session,
+                    f.investing_url,
+                    cached_pair_id=cached_pair_id,
+                    start_date=start,
+                    end_date=today,
+                    full_refresh=do_full,
+                )
+            except TypeError:
+                # API vieja
+                inv_res = scrape_inv(
+                    session,
+                    f.investing_url,
+                    startdate=start,
+                    enddate=today,
+                    fullrefresh=do_full,
+                )
+
+            if isinstance(inv_res, tuple) and len(inv_res) == 2:
+                inv_prices, inv_pair_id = inv_res  # type: ignore[misc]
+            else:
+                inv_prices = inv_res or []  # type: ignore[assignment]
+
+            if inv_pair_id and fmeta.get("investing_pair_id") != inv_pair_id:
+                fmeta["investing_pair_id"] = inv_pair_id
+                any_changed = True
 
         # ── Merge y guardado ─────────────────────────────────────────────────
         merged = merge_updates(existing, ft_prices, fs_prices, inv_prices)
@@ -167,13 +297,13 @@ def main() -> int:
         else:
             log.info("Sin cambios en %s", isin)
 
-        # Metadata
+        # ── Metadata ─────────────────────────────────────────────────────────
         for key, val in [
             ("ft_url", f.ft_url),
             ("fundsquare_url", f.fundsquare_url),
             ("investing_url", f.investing_url),
-            ("name", ft_meta.get("name")),
-            ("currency", ft_meta.get("currency")),
+            ("name", ft_meta.get("name") if isinstance(ft_meta, dict) else None),
+            ("currency", ft_meta.get("currency") if isinstance(ft_meta, dict) else None),
         ]:
             if val and fmeta.get(key) != val:
                 fmeta[key] = val
