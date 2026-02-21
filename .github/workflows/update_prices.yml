@@ -8,7 +8,7 @@ on:
       log_level:
         description: "Nivel de log: DEBUG o INFO"
         required: false
-        default: "INFO"
+        default: "DEBUG"
       full_refresh:
         description: "Backfill completo: 1=si, 0=no"
         required: false
@@ -44,7 +44,7 @@ jobs:
         run: |
           RAW_LOG="${{ github.event.inputs.log_level }}"
           RAW_FULL="${{ github.event.inputs.full_refresh }}"
-          echo "LOGLEVEL=${RAW_LOG:-INFO}" >> $GITHUB_ENV
+          echo "LOGLEVEL=${RAW_LOG:-DEBUG}" >> $GITHUB_ENV
           echo "FULLREFRESH=${RAW_FULL:-0}" >> $GITHUB_ENV
 
       - name: Run updater
