@@ -5,7 +5,6 @@ import logging
 import re
 from datetime import date, datetime, timedelta
 from typing import List, Optional, Tuple
-from urllib.parse import urlparse
 
 from bs4 import BeautifulSoup
 
@@ -130,7 +129,6 @@ def scrape_investing_prices(
     end = end_date or date.today()
     start = date(2000, 1, 1) if full_refresh else (start_date or (end - timedelta(days=45)))
 
-    domain = urlparse(investing_url).netloc or "www.investing.com"
     url = _API_URL.format(instrument_id)
     params = {
         "start-date": start.isoformat(),
@@ -138,11 +136,15 @@ def scrape_investing_prices(
         "time-frame": "Daily",
         "add-missing-rows": "false",
     }
+    # domain-id SIEMPRE "www.investing.com": la API lo exige así aunque la URL del
+    # usuario sea un subdominio regional (es.investing.com, uk.investing.com, etc.)
+    # Usar el subdominio regional causa 500 Internal Server Error en la API.
     headers = {
         "Accept": "application/json, text/plain, */*",
         "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
-        "domain-id": domain,
-        "Referer": investing_url,
+        "domain-id": "www.investing.com",
+        "X-Requested-With": "XMLHttpRequest",
+        "Referer": "https://www.investing.com/",
     }
 
     try:
@@ -151,7 +153,8 @@ def scrape_investing_prices(
                   r.status_code, instrument_id, start, end)
 
         if r.status_code != 200:
-            log.warning("Investing API: status=%s instrument_id=%s", r.status_code, instrument_id)
+            log.warning("Investing API: status=%s instrument_id=%s resp=%s",
+                        r.status_code, instrument_id, r.text[:300])
             return []
 
         payload = r.json()
