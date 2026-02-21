@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import json
 import logging
+import random
 import re
+import time
 from datetime import date, datetime, timedelta
 from typing import Dict, List, Optional, Tuple
+from urllib.parse import urlparse
 
 from bs4 import BeautifulSoup
 
@@ -12,12 +15,9 @@ from ..utils import parse_float
 
 log = logging.getLogger("scrapers.investing")
 
-_API_URL = "https://api.investing.com/api/financialdata/historical/{}"
-
-_BROWSER_UA = (
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/122.0 Safari/537.36"
-)
+# Endpoint TVC (TradingView-compatible) — no está bloqueado por Cloudflare
+# api.investing.com usa TLS fingerprinting y siempre devuelve 403 con requests estándar
+_TVC_URL = "https://tvc{n}.investing.com/{rand}/{now}/{from_ts}/{to_ts}/{id}/history"
 
 
 def _find_key(obj, key: str):
@@ -40,11 +40,16 @@ def _find_key(obj, key: str):
 def _get_instrument_id(session, investing_url: str) -> Optional[str]:
     """Extrae instrument_id de la página histórica de investing.com."""
     try:
+        domain = urlparse(investing_url).netloc or "www.investing.com"
         headers = {
-            "User-Agent": _BROWSER_UA,
+            "User-Agent": (
+                "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/122.0 Safari/537.36"
+            ),
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
-            "Referer": "https://www.investing.com/",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Referer": f"https://{domain}/",
         }
         r = session.get(investing_url, headers=headers, timeout=30)
         if r.status_code != 200:
@@ -57,7 +62,7 @@ def _get_instrument_id(session, investing_url: str) -> Optional[str]:
         if tag and tag.string:
             try:
                 data = json.loads(tag.string)
-                for key in ("instrument_id", "instrumentId"):
+                for key in ("instrument_id", "instrumentId", "pair_id"):
                     val = _find_key(data, key)
                     if val:
                         log.debug("Investing: instrument_id=%s (desde __NEXT_DATA__)", val)
@@ -66,7 +71,11 @@ def _get_instrument_id(session, investing_url: str) -> Optional[str]:
                 log.debug("Investing: Error parseando __NEXT_DATA__: %s", e)
 
         # 2) Fallback: regex en HTML
-        for pattern in (r'"instrument_id"\s*:\s*"?(\d+)"?', r'"pair_id"\s*:\s*"?(\d+)"?'):
+        for pattern in (
+            r'"instrument_id"\s*:\s*"?(\d+)"?',
+            r'"pair_id"\s*:\s*"?(\d+)"?',
+            r'data-pair-id="(\d+)"',
+        ):
             m = re.search(pattern, r.text)
             if m:
                 log.debug("Investing: instrument_id=%s (desde regex)", m.group(1))
@@ -80,29 +89,61 @@ def _get_instrument_id(session, investing_url: str) -> Optional[str]:
         return None
 
 
-def _parse_date(value) -> Optional[str]:
-    if not value:
-        return None
-    try:
-        s = str(value).strip()
-        if re.match(r"^\d{4}-\d{2}-\d{2}", s):
-            return datetime.strptime(s[:10], "%Y-%m-%d").date().isoformat()
-        if re.match(r"^\d{2}/\d{2}/\d{4}", s):
-            return datetime.strptime(s[:10], "%m/%d/%Y").date().isoformat()
-        if re.match(r"^\d{10,13}$", s):
-            ts = int(s) // 1000 if int(s) > 1e10 else int(s)
-            return datetime.utcfromtimestamp(ts).date().isoformat()
-    except Exception:
-        pass
-    return None
+def _fetch_tvc(session, instrument_id: str, from_ts: int, to_ts: int) -> Optional[List[Tuple[str, float]]]:
+    """
+    Llama al endpoint TVC (tvc1..tvc8.investing.com) que devuelve JSON TradingView.
+    No está protegido por Cloudflare a diferencia de api.investing.com.
+    """
+    n = random.randint(1, 8)
+    rand = random.randint(100000, 999999)
+    now = int(time.time())
+    url = _TVC_URL.format(n=n, rand=rand, now=now, from_ts=from_ts, to_ts=to_ts, id=instrument_id)
 
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/122.0 Safari/537.36"
+        ),
+        "Accept": "application/json, text/javascript, */*; q=0.01",
+        "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
+        "Referer": "https://www.investing.com/",
+        "Origin": "https://www.investing.com",
+    }
 
-def _parse_price(value) -> Optional[float]:
     try:
-        if isinstance(value, (int, float)):
-            return float(value)
-        return parse_float(str(value))
-    except Exception:
+        r = session.get(url, headers=headers, timeout=30)
+        log.debug("Investing TVC: status=%s id=%s from=%s to=%s", r.status_code, instrument_id, from_ts, to_ts)
+
+        if r.status_code != 200:
+            log.warning("Investing TVC: status=%s instrument_id=%s", r.status_code, instrument_id)
+            return None
+
+        payload = r.json()
+
+        # Formato TradingView: {"s": "ok", "t": [...timestamps], "c": [...closes]}
+        if payload.get("s") != "ok":
+            log.warning("Investing TVC: status=%r instrument_id=%s", payload.get("s"), instrument_id)
+            return None
+
+        timestamps = payload.get("t", [])
+        closes = payload.get("c", [])
+
+        if not timestamps or not closes or len(timestamps) != len(closes):
+            log.warning("Investing TVC: Datos incompletos. id=%s", instrument_id)
+            return None
+
+        out: List[Tuple[str, float]] = []
+        for ts, c in zip(timestamps, closes):
+            try:
+                d = datetime.utcfromtimestamp(int(ts)).date().isoformat()
+                out.append((d, float(c)))
+            except Exception:
+                continue
+
+        return sorted(out)
+
+    except Exception as e:
+        log.warning("Investing TVC: Error en petición: %s", e)
         return None
 
 
@@ -115,7 +156,7 @@ def scrape_investing_prices(
 ) -> List[Tuple[str, float]]:
     """
     Acepta la URL de la página histórica de investing.com.
-    Extrae instrument_id y llama a la API. Devuelve [(YYYY-MM-DD, close)].
+    Usa endpoint TVC (no Cloudflare) para obtener datos. Devuelve [(YYYY-MM-DD, close)].
     """
     if not investing_url:
         log.debug("Investing: URL vacía, se omite.")
@@ -128,69 +169,17 @@ def scrape_investing_prices(
     end = end_date or date.today()
     start = date(2000, 1, 1) if full_refresh else (start_date or (end - timedelta(days=45)))
 
-    api_url = _API_URL.format(instrument_id)
-    params = {
-        "start-date": start.isoformat(),
-        "end-date": end.isoformat(),
-        "time-frame": "Daily",
-        "add-missing-rows": "false",
-    }
-    headers = {
-        "Accept": "application/json, text/plain, */*",
-        "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
-        "domain-id": "www.investing.com",
-        "Referer": investing_url,
-        "User-Agent": _BROWSER_UA,
-    }
+    from_ts = int(datetime(start.year, start.month, start.day).timestamp())
+    to_ts = int(datetime(end.year, end.month, end.day, 23, 59, 59).timestamp())
 
-    try:
-        r = session.get(api_url, params=params, headers=headers, timeout=30)
-        log.debug("Investing API: status=%s instrument_id=%s %s..%s", r.status_code, instrument_id, start, end)
-        if r.status_code != 200:
-            log.warning("Investing API: status=%s instrument_id=%s", r.status_code, instrument_id)
-            return []
+    # Intentar hasta 3 servidores TVC distintos
+    for attempt in range(3):
+        prices = _fetch_tvc(session, instrument_id, from_ts, to_ts)
+        if prices is not None:
+            log.debug("Investing: %s precios para instrument_id=%s", len(prices), instrument_id)
+            return prices
+        if attempt < 2:
+            time.sleep(0.5)
 
-        payload = r.json()
-
-        # Localizar la lista de datos en la respuesta
-        data_list = None
-        if isinstance(payload, list):
-            data_list = payload
-        elif isinstance(payload, dict):
-            for key in ("data", "historical", "historicalData", "results", "Data"):
-                if key in payload and isinstance(payload[key], list):
-                    data_list = payload[key]
-                    break
-            if data_list is None:
-                data_list = _find_key(payload, "data")
-
-        if not data_list:
-            log.warning("Investing API: Sin datos en respuesta. instrument_id=%s. Resp=%s",
-                        instrument_id, str(payload)[:300])
-            return []
-
-        out: List[Tuple[str, float]] = []
-        for row in data_list:
-            if not isinstance(row, dict):
-                continue
-            date_val = None
-            for dk in ("rowDateRaw", "date", "Date", "time", "timestamp", "rowDate"):
-                if dk in row:
-                    date_val = _parse_date(row[dk])
-                    if date_val:
-                        break
-            close_val = None
-            for ck in ("last_close", "close", "Close", "last_closeRaw", "price", "Price"):
-                if ck in row:
-                    close_val = _parse_price(row[ck])
-                    if close_val is not None:
-                        break
-            if date_val and close_val is not None:
-                out.append((date_val, close_val))
-
-        log.debug("Investing: %s precios para instrument_id=%s", len(out), instrument_id)
-        return sorted(out)
-
-    except Exception as e:
-        log.error("Investing error url=%s: %s", investing_url, e, exc_info=True)
-        return []
+    log.warning("Investing: No se pudieron obtener precios para %s (instrument_id=%s)", investing_url, instrument_id)
+    return []
