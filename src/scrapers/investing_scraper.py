@@ -19,7 +19,6 @@ UA = (
     "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
 )
 
-# Solo señales fuertes de challenge/captcha — evita falsos positivos
 BLOCK_MARKERS = [
     "cdn-cgi/challenge-platform",
     "cf-turnstile",
@@ -104,7 +103,6 @@ def _extract_pair_sml(html: str) -> Tuple[Optional[str], Optional[str]]:
 
 
 def _parse_html_table(html: str) -> List[Tuple[str, float]]:
-    """Extrae precios de la tabla currtable renderizada en la propia página."""
     if not html:
         return []
     try:
@@ -153,10 +151,6 @@ def _post_ajax(
     st: date,
     en: date,
 ) -> Optional[str]:
-    """
-    POST a HistoricalDataAjax usando el mismo dominio del referer.
-    La sesión ya tiene las cookies del GET previo — eso es clave para pasar Cloudflare.
-    """
     domain = urlparse(investing_url).netloc or "es.investing.com"
     ajax_url = f"https://{domain}/instruments/HistoricalDataAjax"
     headers = _build_headers(domain, investing_url, "application/json, */*;q=0.01")
@@ -255,26 +249,24 @@ def scrape_investing_prices(
     session,
     investing_url: str,
     cached_pairid: Optional[str] = None,
+    cached_pair_id: Optional[str] = None,   # ← COMPATIBILIDAD AÑADIDA
     startdate: Optional[date] = None,
     enddate: Optional[date] = None,
     fullrefresh: bool = False,
 ) -> Tuple[List[Tuple[str, float]], Optional[str]]:
     """
     Scraper Investing.com robusto para GitHub Actions.
-
-    Estrategia:
-    1. GET HTML → obtiene cookies de sesión + extrae pairid si no está cacheado.
-    2. POST HistoricalDataAjax con esas cookies (suele pasar Cloudflare).
-    3. Si AJAX falla (403/bloqueo real), fallback a tabla currtable del HTML.
-
-    Returns: ([(YYYY-MM-DD, close)], pairid_usado_o_None)
+    Admite cached_pairid (nuevo) o cached_pair_id (antiguo).
     """
+    # Unificamos el parámetro:
+    effective_pairid = (cached_pairid or cached_pair_id or "").strip() or None
+
     if not investing_url:
         return [], None
 
     end = enddate or date.today()
 
-    # 1. GET HTML — indispensable para las cookies
+    # 1. GET HTML
     html = _fetch_html(session, investing_url)
     blocked = _looks_blocked(html) if html else True
     if blocked and html:
@@ -284,7 +276,7 @@ def scrape_investing_prices(
         )
 
     # Extraer pairid: cache > HTML
-    pairid = (cached_pairid or "").strip() or None
+    pairid = effective_pairid
     smlid: Optional[str] = None
     if not pairid and html:
         pairid, smlid = _extract_pair_sml(html)
@@ -297,7 +289,7 @@ def scrape_investing_prices(
             log.warning("Investing: sin pairid y sin tabla HTML para %s", investing_url)
         return rows, None
 
-    # 2. AJAX (la sesión tiene las cookies del GET — clave para no ser bloqueado)
+    # 2. AJAX
     if not fullrefresh:
         st = startdate or (end - timedelta(days=45))
         frag = _post_ajax(session, investing_url, pairid, smlid, st, end)
@@ -305,7 +297,7 @@ def scrape_investing_prices(
         if rows:
             log.info("Investing: %s precios AJAX pairid=%s para %s", len(rows), pairid, investing_url)
             return rows, pairid
-        # Fallback tabla inline
+        
         rows = _parse_html_table(html) if html else []
         if rows:
             log.info("Investing: %s precios tabla HTML para %s", len(rows), investing_url)
@@ -316,9 +308,9 @@ def scrape_investing_prices(
             )
         return rows, pairid
 
-    # 3. Full refresh — AJAX en chunks hacia atrás (máx ~60 años)
-    CHUNK_DAYS = 365 * 3   # 3 años por chunk
-    MAX_CHUNKS = 20         # 20 × 3 = 60 años máximo
+    # 3. Full refresh
+    CHUNK_DAYS = 365 * 3
+    MAX_CHUNKS = 20
     collected: Dict[str, float] = {}
     empty_streak = 0
 
@@ -343,7 +335,6 @@ def scrape_investing_prices(
         )
         return out, pairid
 
-    # AJAX no dio nada → última opción: tabla inline
     rows = _parse_html_table(html) if html else []
     if rows:
         log.warning(
