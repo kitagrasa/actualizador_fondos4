@@ -55,6 +55,12 @@
       "investing_url": "https://es.investing.com/funds/schroder-intlslct-glblgold-a-acceur-historical-data",
       "name": "Schroder International Selection Fund Global Gold A Accumulation EUR Hedged"
     },
+    "LU1372006947": {
+      "currency": "EUR",
+      "ft_url": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU1372006947:EUR",
+      "fundsquare_url": "https://www.fundsquare.net/security/histo-prices?idInstr=240088",
+      "name": "Cobas LUX SICAV - Cobas Selection Fund Class P Acc EUR"
+    },
     "LU1598719752": {
       "currency": "EUR",
       "ft_symbol": "LU1598719752",
