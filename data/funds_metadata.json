@@ -107,6 +107,13 @@
       "investing_pair_id": "1181284",
       "investing_url": "https://es.investing.com/funds/lu1832174962-historical-data",
       "name": "Indépendance AM Europe Small A (C)"
+    },
+    "LU2145461757": {
+      "ariva_url": "https://www.ariva.de/fonds/robeco-smart-energy-d-eur/kurse/historische-kurse?boerse_id=170",
+      "currency": "EUR",
+      "ft_url": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU2145461757:EUR",
+      "fundsquare_url": "https://www.fundsquare.net/security/histo-prices?idInstr=369173",
+      "name": "Robeco Smart Energy D-EUR Capitalisation"
     }
   }
 }
