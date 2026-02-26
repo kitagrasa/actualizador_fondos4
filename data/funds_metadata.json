@@ -27,6 +27,13 @@
       "fundsquare_url": "https://www.fundsquare.net/security/histo-prices?idInstr=28356",
       "name": "Multipartner SICAV - Konwave Gold Equity Fund B EUR"
     },
+    "LU0329355670": {
+      "ariva_url": "https://www.ariva.de/fonds/robeco-qi-emerging-markets-active-equities-eur-d/kurse/historische-kurse?boerse_id=208",
+      "currency": "EUR",
+      "ft_url": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU0329355670:EUR",
+      "fundsquare_url": "https://www.fundsquare.net/security/histo-prices?idInstr=58329",
+      "name": "Robeco QI Emerging Markets Active Equities D €"
+    },
     "LU0524465548": {
       "currency": "EUR",
       "ft_symbol": "LU0524465548",
