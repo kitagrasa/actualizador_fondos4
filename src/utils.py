@@ -31,18 +31,18 @@ def parse_float(text: str) -> float:
     # Quitamos letras de monedas o cualquier caracter extraño, dejamos solo dígitos, coma, punto y negativo
     s = re.sub(r"[^\d\.\,\-]", "", s)
     if not s:
-        raise ValueError(f"No se pudo parsear texto a número: {text!r}")
+        raise ValueError(f"No se pudo parsear número de {text!r}")
         
     # Detectar el formato exacto y limpiarlo a formato interno estándar (float)
     if "," in s and "." in s:
         if s.rfind(",") > s.rfind("."):
-            # Formato europeo: 1.234,56 -> 1234.56
+            # Formato europeo: 35.450,82 -> 35450.82
             s = s.replace(".", "").replace(",", ".")
         else:
-            # Formato inglés FT: 1,234.56 -> 1234.56
+            # Formato inglés FT: 35,450.82 -> 35450.82
             s = s.replace(",", "")
     elif "," in s:
-        # Formato europeo simple: 1234,56 -> 1234.56
+        # Formato europeo simple: 35450,82 -> 35450.82
         s = s.replace(",", ".")
         
     return float(s)
