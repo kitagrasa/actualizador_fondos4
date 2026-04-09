@@ -18,12 +18,12 @@ def read_prices_json(path: Path) -> Dict[str, float]:
         for row in data:
             d = row.get("date")
             c = row.get("close")
-            if isinstance(d, str):
+            if isinstance(d, str) and c is not None:
+                # Soportar lectura tanto si estaba guardado de forma estándar o si era el string que guardamos antes
                 if isinstance(c, (int, float)):
                     out[d] = float(c)
                 elif isinstance(c, str):
-                    # Lee el formato "1.234,56", le quita el punto de los miles y cambia la coma por punto 
-                    # para que Python lo entienda matemáticamente ("1234.56")
+                    # Transición: convierte los textos "37.501,04" otra vez a número matemático "37501.04"
                     c_clean = c.replace(".", "").replace(",", ".")
                     out[d] = float(c_clean)
         return out
@@ -36,22 +36,12 @@ def write_prices_json_if_changed(path: Path, prices_by_date: Dict[str, float]) -
     rows = []
     
     for d in sorted(prices_by_date.keys(), reverse=True):
-        price = prices_by_date[d]
-        
-        # 1. Formateamos primero al estándar con comas en miles y punto decimal (ej: "35,450.820000")
-        price_str = f"{price:,.6f}"
-        
-        # 2. Eliminamos los ceros inútiles a la derecha y el separador decimal si no hay decimales
-        if "." in price_str:
-            price_str = price_str.rstrip("0").rstrip(".")
-            
-        # 3. Intercambiamos mágicamente comas por puntos (miles) y puntos por comas (decimales)
-        # Esto transforma "35,450.82" a "35.450,82"
-        trans = str.maketrans(',.', '.,')
-        price_str = price_str.translate(trans)
-            
-        rows.append({"date": d, "close": price_str})
+        # Redondeamos a un máximo de 6 decimales para evitar problemas de coma flotante infinita.
+        # Se guarda como tipo numérico (sin comillas) con punto decimal como exige el formato JSON.
+        price = round(prices_by_date[d], 6)
+        rows.append({"date": d, "close": price})
 
+    # Convertimos a JSON estándar
     new_text = json_dumps_canonical(rows) + "\n"
     
     old_text = path.read_text(encoding="utf-8") if path.exists() else None
