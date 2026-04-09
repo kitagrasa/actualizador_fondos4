@@ -22,8 +22,10 @@ def read_prices_json(path: Path) -> Dict[str, float]:
                 if isinstance(c, (int, float)):
                     out[d] = float(c)
                 elif isinstance(c, str):
-                    # Si el precio viene de un JSON guardado como string con coma, se pasa a punto internamente
-                    out[d] = float(c.replace(',', '.'))
+                    # Lee el formato "1.234,56", le quita el punto de los miles y cambia la coma por punto 
+                    # para que Python lo entienda matemáticamente ("1234.56")
+                    c_clean = c.replace(".", "").replace(",", ".")
+                    out[d] = float(c_clean)
         return out
     except Exception as e:
         log.error("No se pudo leer %s: %s", path, e)
@@ -36,13 +38,17 @@ def write_prices_json_if_changed(path: Path, prices_by_date: Dict[str, float]) -
     for d in sorted(prices_by_date.keys(), reverse=True):
         price = prices_by_date[d]
         
-        # 1. Conservamos precisión máxima y evitamos notación científica
-        price_str = f"{price:.6f}"
+        # 1. Formateamos primero al estándar con comas en miles y punto decimal (ej: "35,450.820000")
+        price_str = f"{price:,.6f}"
         
-        # 2. Eliminamos ceros sobrantes a la derecha y reemplazamos punto por coma
+        # 2. Eliminamos los ceros inútiles a la derecha y el separador decimal si no hay decimales
         if "." in price_str:
             price_str = price_str.rstrip("0").rstrip(".")
-            price_str = price_str.replace(".", ",")
+            
+        # 3. Intercambiamos mágicamente comas por puntos (miles) y puntos por comas (decimales)
+        # Esto transforma "35,450.82" a "35.450,82"
+        trans = str.maketrans(',.', '.,')
+        price_str = price_str.translate(trans)
             
         rows.append({"date": d, "close": price_str})
 
