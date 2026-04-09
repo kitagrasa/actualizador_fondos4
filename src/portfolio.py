@@ -37,10 +37,11 @@ def write_prices_json_if_changed(path: Path, prices_by_date: Dict[str, float]) -
         price = prices_by_date[d]
         
         # 1. Conservamos precisión máxima y evitamos notación científica
-        # 2. Eliminamos ceros sobrantes a la derecha
-        # 3. Reemplazamos el punto decimal de Python por una coma
-        price_str = f"{price:.6f}".rstrip("0").rstrip(".")
+        price_str = f"{price:.6f}"
+        
+        # 2. Eliminamos ceros sobrantes a la derecha y reemplazamos punto por coma
         if "." in price_str:
+            price_str = price_str.rstrip("0").rstrip(".")
             price_str = price_str.replace(".", ",")
             
         rows.append({"date": d, "close": price_str})
