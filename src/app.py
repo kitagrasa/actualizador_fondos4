@@ -160,9 +160,9 @@ def main() -> int:
             yf_prices, yf_meta = scrape_yahoo_finance_prices(
                 session,
                 yahoo_url,
-                startdate=start,
+                startdate=None,        # <-- MODIFICADO: No recorta las fechas antiguas
                 enddate=today,
-                full_refresh=do_full,
+                full_refresh=True,     # <-- MODIFICADO: Pide siempre 10 años a Yahoo para tapar huecos
             )
 
         # ── FT ───────────────────────────────────────────────────────────────
