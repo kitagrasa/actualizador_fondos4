@@ -5,7 +5,7 @@ from datetime import date, datetime, timezone
 from typing import Dict, List, Optional, Tuple
 from urllib.parse import parse_qs, unquote, urlparse
 
-log = logging.getLogger("scrapers.yahoo_finance")
+log = logging.getLogger("scrapers.yahoofinance")
 
 def _extract_symbol(yahoo_url: str) -> Optional[str]:
     if not yahoo_url:
@@ -14,7 +14,7 @@ def _extract_symbol(yahoo_url: str) -> Optional[str]:
     u = urlparse(yahoo_url.strip())
     qs = parse_qs(u.query)
 
-    for key in ("symbols", "symbol", "s"):
+    for key in ("symbols", "symbol", "s", "p"):
         vals = qs.get(key)
         if vals and vals[0].strip():
             return unquote(vals[0].strip())
@@ -33,31 +33,29 @@ def _extract_symbol(yahoo_url: str) -> Optional[str]:
 
     return None
 
-
 def scrape_yahoo_finance_prices(
     session,
     yahoo_url: str,
     startdate: Optional[date] = None,
     enddate: Optional[date] = None,
-    fullrefresh: bool = False,
+    full_refresh: bool = False,
 ) -> Tuple[List[Tuple[str, float]], Dict]:
-    
     if not yahoo_url:
         return [], {}
 
     symbol = _extract_symbol(yahoo_url)
-    meta: Dict = {"yahoo_finance_url": yahoo_url}
+    meta: Dict = {"yahoo_url": yahoo_url}
 
     if not symbol:
         log.warning("Yahoo Finance: no se pudo extraer símbolo de %s", yahoo_url)
         return [], meta
 
-    meta["yahoo_symbol"] = symbol
+    meta["yahoosymbol"] = symbol
 
     params = {
         "interval": "1d",
-        "range": "10y" if fullrefresh else "6mo",
-        "includeAdjustedClose": "true",
+        "range": "10y" if full_refresh else "6mo",
+        "includeAdjustedClose": "false", # Para fondos suele ser mejor el precio limpio (Close)
         "events": "capitalGain|div|split",
         "formatted": "true",
         "lang": "es-ES",
@@ -67,7 +65,7 @@ def scrape_yahoo_finance_prices(
     }
 
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Accept": "application/json,text/plain,*/*",
         "Referer": yahoo_url,
     }
@@ -81,7 +79,7 @@ def scrape_yahoo_finance_prices(
         )
 
         if r.status_code != 200:
-            log.warning("Yahoo Finance %s devolvió HTTP %s", symbol, r.status_code)
+            log.warning("Yahoo Finance API devuleve %s para %s", r.status_code, symbol)
             return [], meta
 
         payload = r.json()
@@ -89,28 +87,23 @@ def scrape_yahoo_finance_prices(
         result = (chart.get("result") or [None])[0] or {}
 
         if not result:
-            log.warning("Yahoo Finance sin datos (result vacío) para %s", symbol)
+            err = chart.get("error")
+            log.warning("Yahoo Finance sin resultados para %s. Error: %s", symbol, err)
             return [], meta
 
         ym = result.get("meta") or {}
         if ym.get("currency"):
             meta["currency"] = ym["currency"]
-        if ym.get("longName"):
-            meta["name"] = ym["longName"]
-        elif ym.get("shortName"):
-            meta["name"] = ym["shortName"]
 
         timestamps = result.get("timestamp") or []
         indicators = result.get("indicators") or {}
 
-        # Priorizamos cierre ajustado si existe
-        adjclose = ((indicators.get("adjclose") or [{}])[0].get("adjclose") or [])
-        close = ((indicators.get("quote") or [{}])[0].get("close") or [])
+        # Obtenemos la matriz de precios Close (Cierre normal, no alterado)
+        close_prices = ((indicators.get("quote") or [{}])[0].get("close") or [])
 
-        series = adjclose if any(v is not None for v in adjclose) else close
         out: List[Tuple[str, float]] = []
 
-        for ts, px in zip(timestamps, series):
+        for ts, px in zip(timestamps, close_prices):
             if px is None:
                 continue
 
@@ -126,5 +119,5 @@ def scrape_yahoo_finance_prices(
         return sorted(out), meta
 
     except Exception as e:
-        log.error("Yahoo Finance error scrapeando %s: %s", yahoo_url, e)
+        log.error("Error en Yahoo Finance URL=%s Detalle=%s", yahoo_url, e, exc_info=True)
         return [], meta
