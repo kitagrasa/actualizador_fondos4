@@ -66,7 +66,9 @@
       "currency": "EUR",
       "ft_url": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU1372006947:EUR",
       "fundsquare_url": "https://www.fundsquare.net/security/histo-prices?idInstr=240088",
-      "name": "Cobas LUX SICAV - Cobas Selection Fund Class P Acc EUR"
+      "name": "Cobas LUX SICAV - Cobas Selection Fund Class P Acc EUR",
+      "yahoo_symbol": "0P0001AF4X.F",
+      "yahoo_url": "https://es.finance.yahoo.com/quote/0P0001AF4X.F/history/"
     },
     "LU1598719752": {
       "currency": "EUR",
