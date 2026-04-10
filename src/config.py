@@ -12,10 +12,11 @@ log = logging.getLogger(__name__)
 @dataclass(frozen=True)
 class FundConfig:
     isin: str
-    ft_url: str          # Vacío → salta FT
-    fundsquare_url: str  # Vacío → salta Fundsquare
-    investing_url: str   # Vacío → salta Investing
-    ariva_url: str       # Vacío → salta Ariva
+    ft_url: str            # Vacío → salta FT
+    fundsquare_url: str    # Vacío → salta Fundsquare
+    investing_url: str     # Vacío → salta Investing
+    ariva_url: str         # Vacío → salta Ariva
+    yahoo_finance_url: str # Vacío → salta Yahoo Finance
 
 
 def load_funds_csv(path_or_url: str | Path) -> List[FundConfig]:
@@ -72,6 +73,7 @@ def load_funds_csv(path_or_url: str | Path) -> List[FundConfig]:
             fundsquare_url=(row.get("fundsquare_url") or "").strip(),
             investing_url=(row.get("investing_url") or "").strip(),
             ariva_url=(row.get("ariva_url") or "").strip(),
+            yahoo_finance_url=(row.get("yahoo_finance_url") or "").strip(),
         ))
 
     # Deduplicar por ISIN (última línea gana)
