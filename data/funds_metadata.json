@@ -7,6 +7,13 @@
       "yahoo_symbol": "0P0001MABK.F",
       "yahoo_url": "https://es.finance.yahoo.com/quote/0P0001MABK.F/history/"
     },
+    "ES0175224031": {
+      "currency": "EUR",
+      "ft_url": "https://markets.ft.com/data/funds/tearsheet/historical?s=ES0175224031:EUR",
+      "name": "Santander Small Caps España A FI",
+      "yahoo_symbol": "0P000017PK.F",
+      "yahoo_url": "https://es.finance.yahoo.com/quote/0P000017PK.F/history/"
+    },
     "FR0010930644": {
       "ariva_url": "https://www.ariva.de/etf/amundi-global-hydrogen-ucits-etf-acc/kurse/historische-kurse?boerse_id=45",
       "currency": "EUR",
