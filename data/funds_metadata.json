@@ -1,5 +1,11 @@
 {
   "funds": {
+    "CA26139R1091": {
+      "ariva_url": "https://www.ariva.de/aktien/dpm-metals-inc-aktie/kurse/historische-kurse?boerse_id=83",
+      "currency": "USD",
+      "yahoo_symbol": "DPMLF",
+      "yahoo_url": "https://es.finance.yahoo.com/quote/DPMLF/history/"
+    },
     "ES0140794001": {
       "currency": "EUR",
       "ft_url": "https://markets.ft.com/data/funds/tearsheet/historical?s=ES0140794001:EUR",
