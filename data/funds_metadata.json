@@ -49,6 +49,13 @@
       "yahoo_symbol": "WCOM.L",
       "yahoo_url": "https://finance.yahoo.com/quote/WCOM.L/history/"
     },
+    "IE00BH6XSF26": {
+      "currency": "EUR",
+      "ft_url": "https://markets.ft.com/data/funds/tearsheet/historical?s=IE00BH6XSF26:EUR",
+      "name": "Heptagon Fund ICAV - Kopernik Global All-Cap Equity Fund AE EUR Acc",
+      "yahoo_symbol": "0P0001AJ8L.F",
+      "yahoo_url": "https://es.finance.yahoo.com/quote/0P0001AJ8L.F/history/"
+    },
     "LU0171306680": {
       "ariva_url": "https://www.ariva.de/fonds/blackrock-global-funds-world-gold-fund-e2-eur/kurse/historische-kurse",
       "currency": "EUR",
