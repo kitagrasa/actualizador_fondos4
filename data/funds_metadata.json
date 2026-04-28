@@ -20,6 +20,13 @@
       "yahoo_symbol": "0P00016YQ5.F",
       "yahoo_url": "https://es.finance.yahoo.com/quote/0P00016YQ5.F/history/"
     },
+    "ES0119207001": {
+      "currency": "EUR",
+      "ft_url": "https://markets.ft.com/data/funds/tearsheet/historical?s=ES0119207001:EUR",
+      "name": "Cobas Renta FI",
+      "yahoo_symbol": "0P00019W2S.F",
+      "yahoo_url": "https://es.finance.yahoo.com/quote/0P00019W2S.F/history/"
+    },
     "ES0140794001": {
       "currency": "EUR",
       "ft_url": "https://markets.ft.com/data/funds/tearsheet/historical?s=ES0140794001:EUR",
