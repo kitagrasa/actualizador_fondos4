@@ -18,3 +18,5 @@
 18. Las dependencias externas clave son `requests` (red), `beautifulsoup4` (parsing) y `lxml` (motor de velocidad).
 19. Todo el código aprovecha librerías estándar de Python (`dataclasses`, `pathlib`, `json`) minimizando carga.
 20. El output resultante produce datos estructurados y limpios listos para utilizarse en Portfolio Performance.
+
+Quiero que optimices siempre los procesos, que sean robustos y comprueba que funcionen correctamente. Cuando realices algún cambio en el proyecto que afecte al contexto, actualiza el contexto también
