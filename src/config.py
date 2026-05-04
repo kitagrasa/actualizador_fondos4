@@ -17,6 +17,7 @@ class FundConfig:
     investing_url: str   # Vacío → salta Investing
     ariva_url: str       # Vacío → salta Ariva
     yahoo_url: str       # Vacío → salta Yahoo Finance
+    cobas_url: str       # Vacío → salta Cobas AM            <-- NUEVO
 
 
 def load_funds_csv(path_or_url: str | Path) -> List[FundConfig]:
@@ -26,21 +27,19 @@ def load_funds_csv(path_or_url: str | Path) -> List[FundConfig]:
     # 1. Si es un enlace externo (Ej: Google Sheets publicado como CSV)
     if path_str.startswith("http://") or path_str.startswith("https://"):
         try:
-            # Usamos requests que maneja redirecciones de Google automáticamente
             resp = requests.get(
                 path_str, 
                 headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
                 timeout=15
             )
             resp.raise_for_status()
-            # Separamos el contenido en líneas para leerlas como CSV
             content = resp.text
             lines = content.splitlines()
         except Exception as e:
             log.error("Error descargando el CSV desde la web %s: %s", path_str, e)
             return []
             
-    # 2. Fallback (por si acaso): Si es un archivo local tradicional en GitHub
+    # 2. Fallback: archivo local
     else:
         path = Path(path_or_url)
         if not path.exists():
@@ -55,7 +54,6 @@ def load_funds_csv(path_or_url: str | Path) -> List[FundConfig]:
 
     funds: List[FundConfig] = []
     
-    # csv.DictReader empareja automáticamente los datos usando la primera línea como cabecera
     reader = csv.DictReader(lines)
     
     if reader.fieldnames is None or "isin" not in reader.fieldnames:
@@ -74,6 +72,7 @@ def load_funds_csv(path_or_url: str | Path) -> List[FundConfig]:
             investing_url=(row.get("investing_url") or "").strip(),
             ariva_url=(row.get("ariva_url") or "").strip(),
             yahoo_url=(row.get("yahoo_url") or "").strip(),
+            cobas_url=(row.get("cobas_url") or "").strip(),   # <-- NUEVO
         ))
 
     # Deduplicar por ISIN (última línea gana)
