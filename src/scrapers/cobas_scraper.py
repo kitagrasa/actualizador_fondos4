@@ -39,12 +39,17 @@ def _current_price_from_html(html: str, product_id: str) -> Optional[Tuple[str, 
             return None
 
         # El script tiene forma: window.products = JSON.parse(`...`);
+        # El contenido puede estar escapado con \" y otros.
         match = re.search(r"JSON\.parse\(`(.*?)`\)", script.string, re.DOTALL)
         if not match:
             log.warning("Cobas: no se pudo extraer el JSON del product-block")
             return None
 
-        data = json.loads(match.group(1))
+        raw_json = match.group(1)
+        # Limpiar escapes típicos de plantillas literales de JS
+        # Reemplazar \" por ", \\ por \, etc.
+        cleaned = raw_json.replace('\\"', '"').replace('\\\\', '\\')
+        data = json.loads(cleaned)
         products = data.get("data", [])
 
         for prod in products:
