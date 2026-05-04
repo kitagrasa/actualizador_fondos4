@@ -10,6 +10,20 @@ from bs4 import BeautifulSoup
 
 log = logging.getLogger(__name__)
 
+
+# ---------------------------------------------------------------------------
+# Cookie de consentimiento de Cookiebot que indica que se han aceptado
+# todas las categorías de cookies (necesarias, preferencias, estadísticas,
+# marketing). Esto permite que la web de Cobas AM devuelva el HTML completo
+# en lugar del banner de cookies.
+# ---------------------------------------------------------------------------
+COOKIEBOT_CONSENT_COOKIE = (
+    "CookieConsent="
+    "{stamp:%27-1%27%2Cnecessary:true%2Cpreferences:true%2Cstatistics:true%2Cmarketing:true%2C"
+    "method:%27explicit%27%2Cver:1%2Cutc:1680000000000%2Cregion:%27es%27}"
+)
+
+
 # ---------------------------------------------------------------------------
 def _extract_product_id_from_url(url: str) -> Optional[str]:
     """
@@ -47,7 +61,6 @@ def _current_price_from_html(html: str, product_id: str) -> Optional[Tuple[str, 
 
         raw_json = match.group(1)
         # Limpiar escapes típicos de plantillas literales de JS
-        # Reemplazar \" por ", \\ por \, etc.
         cleaned = raw_json.replace('\\"', '"').replace('\\\\', '\\')
         data = json.loads(cleaned)
         products = data.get("data", [])
@@ -91,85 +104,22 @@ def _current_price_from_html(html: str, product_id: str) -> Optional[Tuple[str, 
         return None
 
 
-def _historical_from_api(session, product_id: str) -> List[Tuple[str, float]]:
-    """
-    Intenta obtener serie histórica desde la API pública de Cobas AM.
-    Se prueban varios endpoints habituales; la respuesta debe ser JSON
-    con una lista de objetos {date, value/nav/price}.
-    """
-    candidates = [
-        f"https://api.cobasam.com/graph/{product_id}",
-        f"https://api.cobasam.com/product/{product_id}/prices",
-        f"https://api.cobasam.com/{product_id}/historical",
-        f"https://api.cobasam.com/data/{product_id}",
-    ]
-
-    for url in candidates:
-        try:
-            resp = session.get(url, timeout=10)
-            if resp.status_code != 200:
-                continue
-            data = resp.json()
-            prices = _parse_historical_json(data)
-            if prices:
-                log.info("Cobas: histórico obtenido de %s (%d puntos)", url, len(prices))
-                return prices
-        except Exception:
-            continue
-    return []
-
-
-def _parse_historical_json(payload) -> List[Tuple[str, float]]:
-    """Convierte la respuesta JSON de la API a [(fecha, precio), ...]."""
-    points = payload.get("data", payload) if isinstance(payload, dict) else payload
-    if not isinstance(points, list):
-        return []
-
-    out = []
-    for item in points:
-        if not isinstance(item, dict):
-            continue
-        # Campos posibles de fecha/nav
-        date_str = item.get("date") or item.get("fecha") or item.get("x")
-        value = item.get("value") or item.get("nav") or item.get("price") or item.get("y")
-        if not date_str or value is None:
-            continue
-        try:
-            price = float(str(value).replace(",", "."))
-        except ValueError:
-            continue
-        # Intentar parsear fecha (varios formatos)
-        dt = None
-        for fmt in ("%Y-%m-%d", "%d-%m-%Y", "%Y%m%d"):
-            try:
-                dt = datetime.strptime(str(date_str)[:10], fmt)
-                break
-            except ValueError:
-                continue
-        if dt is None:
-            # parsear como timestamp Unix (segundos o milisegundos)
-            try:
-                ts = float(date_str)
-                if ts > 1e12:   # milisegundos
-                    ts /= 1000
-                dt = datetime.utcfromtimestamp(ts)
-            except Exception:
-                continue
-        out.append((dt.strftime("%Y-%m-%d"), price))
-
-    return sorted(out, key=lambda x: x[0])
-
-
 # ---------------------------------------------------------------------------
 def scrape_cobas_prices(
     session,
     cobas_url: str,
 ) -> List[Tuple[str, float]]:
     """
-    Obtiene precios desde la web / API de Cobas Asset Management.
+    Obtiene el último valor liquidativo desde la ficha de producto de Cobas AM.
 
-    - Primero intenta descargar histórico a través de la API pública.
-    - Si no existe o falla, extrae el último NAV desde el HTML de la página.
+    La web de Cobas requiere cookies de consentimiento para mostrar el HTML
+    completo. Este scraper envía la cookie CookieConsent con todas las
+    categorías aceptadas para obtener la página real.
+
+    Dado que la API pública (api.cobasam.com) no es accesible desde fuera
+    y solo devuelve el NAV más reciente, este scraper se limita al último
+    precio disponible. Para histórico completo deben usarse otras fuentes
+    (FT, Yahoo Finance, etc.).
 
     Args:
         session: requests.Session con reintentos.
@@ -186,14 +136,17 @@ def scrape_cobas_prices(
         log.warning("Cobas: no se pudo extraer product_id de %s", cobas_url)
         return []
 
-    # 1) Intentar histórico vía API
-    hist = _historical_from_api(session, product_id)
-    if hist:
-        return hist
-
-    # 2) Fallback: obtener el último precio desde el HTML
+    # ── Obtener HTML completo enviando la cookie de consentimiento ────────
     try:
-        resp = session.get(cobas_url, timeout=15)
+        resp = session.get(
+            cobas_url,
+            headers={
+                "Cookie": COOKIEBOT_CONSENT_COOKIE,
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+                "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
+            },
+            timeout=25,
+        )
         resp.raise_for_status()
         html = resp.text
     except Exception as e:
@@ -202,8 +155,8 @@ def scrape_cobas_prices(
 
     current = _current_price_from_html(html, product_id)
     if current:
-        log.info("Cobas: obtenido solo precio más reciente de %s", cobas_url)
+        log.info("Cobas: NAV obtenido de %s → %s = %s", cobas_url, current[0], current[1])
         return [current]
 
-    log.warning("Cobas: no se pudo extraer ningún precio de %s", cobas_url)
+    log.warning("Cobas: no se pudo extraer el precio de %s", cobas_url)
     return []
