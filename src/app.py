@@ -16,6 +16,7 @@ from .scrapers.fundsquare_scraper import scrape_fundsquare_prices
 from .scrapers.investing_scraper import scrape_investing_prices
 from .scrapers.ariva_scraper import scrape_ariva_prices
 from .scrapers.yahoo_finance_scraper import scrape_yahoo_finance_prices
+from .scrapers.cobas_scraper import scrape_cobas_prices   # <-- NUEVO
 
 ROOT       = Path(__file__).resolve().parents[1]
 DATA_DIR   = ROOT / "data"
@@ -107,11 +108,11 @@ def main() -> int:
     setup_logging()
     log.info("Inicio actualización")
 
-    # ── NUEVO: Control estricto del Secreto ──
+    # ── Control estricto del Secreto ──
     funds_csv_url = os.environ.get("FUNDS_CSV_URL", "").strip()
     if not funds_csv_url.startswith("http"):
         log.error("CRÍTICO: El secreto FUNDS_CSV_URL no está configurado o no es una URL válida. Abortando.")
-        return 1  # Exit code 1 forzará a GitHub Actions a fallar y avisarte
+        return 1
         
     funds = load_funds_csv(funds_csv_url)
     if not funds:
@@ -133,13 +134,15 @@ def main() -> int:
         isin = f.isin
         ariva_url = getattr(f, "ariva_url", None)
         yahoo_url = getattr(f, "yahoo_url", None)
-        
-        log.info("Procesando %s  FT=%s  FS=%s  INV=%s  ARV=%s  YF=%s",
+        cobas_url = getattr(f, "cobas_url", None)          # <-- NUEVO
+
+        log.info("Procesando %s  FT=%s  FS=%s  INV=%s  ARV=%s  CB=%s  YF=%s",
                  isin,
                  getattr(f, "ft_url", "—") or "—",
                  getattr(f, "fundsquare_url", "—") or "—",
                  getattr(f, "investing_url", "—") or "—",
                  ariva_url or "—",
+                 cobas_url or "—",                           # <-- NUEVO
                  yahoo_url or "—")
 
         existing_path = PRICES_DIR / f"{isin}.json"
@@ -160,9 +163,9 @@ def main() -> int:
             yf_prices, yf_meta = scrape_yahoo_finance_prices(
                 session,
                 yahoo_url,
-                startdate=None,        # <-- MODIFICADO: No recorta las fechas antiguas
+                startdate=None,        # <-- No recorta fechas antiguas
                 enddate=today,
-                full_refresh=True,     # <-- MODIFICADO: Pide siempre 10 años a Yahoo para tapar huecos
+                full_refresh=True,     # <-- Pide siempre 10 años a Yahoo
             )
 
         # ── FT ───────────────────────────────────────────────────────────────
@@ -208,10 +211,20 @@ def main() -> int:
                     else:
                         ariva_prices_tuples = raw_ariva
 
+        # ── Cobas ─────────────────────────────────────────────────────────────   <-- NUEVO BLOQUE
+        cobas_prices = scrape_cobas_prices(session, cobas_url)
+
         # ── Merge y guardado ──────────────────────────────────────────────────
-        # El orden define la prioridad (el que está más a la derecha SOBRESCRIBE a los demás)
-        # Prioridad actual de menor a mayor: (1) Yahoo -> (2) Ariva -> (3) Investing -> (4) FS -> (5) FT
-        merged = merge_updates(existing, yf_prices, ariva_prices_tuples, inv_prices, fs_prices, ft_prices)
+        # Prioridad (el último sobrescribe): Yahoo → Ariva → Investing → Fundsquare → Cobas → FT
+        merged = merge_updates(
+            existing,
+            yf_prices,
+            ariva_prices_tuples,
+            inv_prices,
+            fs_prices,
+            cobas_prices,           # <-- Cobas entra aquí
+            ft_prices,
+        )
 
         if write_prices_json_if_changed(existing_path, merged):
             log.info("Actualizado %s → %s puntos", isin, len(merged))
@@ -225,6 +238,7 @@ def main() -> int:
             ("fundsquare_url", getattr(f, "fundsquare_url", None)),
             ("investing_url",  getattr(f, "investing_url", None)),
             ("ariva_url",      ariva_url),
+            ("cobas_url",      cobas_url),     # <-- NUEVO
             ("yahoo_url",      yahoo_url),
         ]:
             if val and fmeta.get(key) != val:
