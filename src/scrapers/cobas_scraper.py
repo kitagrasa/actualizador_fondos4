@@ -10,13 +10,8 @@ from bs4 import BeautifulSoup
 
 log = logging.getLogger(__name__)
 
-
-# ---------------------------------------------------------------------------
-# Cookie de consentimiento de Cookiebot que indica que se han aceptado
-# todas las categorías de cookies (necesarias, preferencias, estadísticas,
-# marketing). Esto permite que la web de Cobas AM devuelva el HTML completo
-# en lugar del banner de cookies.
-# ---------------------------------------------------------------------------
+# Cookie de consentimiento de Cookiebot que garantiza que la web devuelva
+# el HTML completo sin banners que puedan ocultar parte del contenido.
 COOKIEBOT_CONSENT_COOKIE = (
     "CookieConsent="
     "{stamp:%27-1%27%2Cnecessary:true%2Cpreferences:true%2Cstatistics:true%2Cmarketing:true%2C"
@@ -24,125 +19,93 @@ COOKIEBOT_CONSENT_COOKIE = (
 )
 
 
-# ---------------------------------------------------------------------------
-def _extract_product_id_from_url(url: str) -> Optional[str]:
+def _extract_from_page(html: str) -> Optional[Tuple[str, float]]:
     """
-    Del path de la página de producto extrae el identificador.
-    Ejemplo:  .../lux_international_eur/  →  LUX_INTERNATIONAL_EUR
-    """
-    if not url:
-        return None
-    # Tomamos el último fragmento de la ruta que no esté vacío
-    parts = [p for p in url.strip("/").split("/") if p]
-    if not parts:
-        return None
-    return parts[-1].upper()
-
-
-def _current_price_from_html(html: str, product_id: str) -> Optional[Tuple[str, float]]:
-    """
-    Parsea el bloque <script id="product-block"> y extrae el
-    liquidative_value + liquidative_date para el producto dado.
-    Retorna (fecha_iso, nav) o None.
+    Extrae precio y fecha directamente de los elementos HTML de la ficha del producto.
+    Busca el bloque <div class="each-data"> que contiene el valor liquidativo y
+    el párrafo <p class="date"> con la fecha.
     """
     try:
         soup = BeautifulSoup(html, "html.parser")
-        script = soup.find("script", id="product-block")
-        if not script or not script.string:
-            log.warning("Cobas: no se encontró <script id='product-block'>")
+        # 1) Localizar el precio
+        # La estructura típica es:
+        # <div class="each-data">
+        #   <p class="number">176,540000 €</p>
+        #   <p class="title">Valor liquidativo</p>
+        # </div>
+        price_elem = soup.select_one("div.each-data p.number")
+        if not price_elem:
+            log.warning("Cobas: no se encontró div.each-data p.number")
             return None
 
-        # El script tiene forma: window.products = JSON.parse(`...`);
-        # El contenido puede estar escapado con \" y otros.
-        match = re.search(r"JSON\.parse\(`(.*?)`\)", script.string, re.DOTALL)
+        raw_price = price_elem.get_text(strip=True)   # "176,540000 €"
+        # Quitar cualquier cosa que no sea dígito, coma, punto
+        price_str = re.sub(r"[^\d,]", "", raw_price).replace(",", ".")
+        try:
+            nav = float(price_str)
+        except ValueError:
+            log.warning("Cobas: no se pudo convertir precio: %s", raw_price)
+            return None
+
+        # 2) Fecha: <p class="date">Fecha valor liquidativo: 30-4-2026</p>
+        date_elem = soup.find("p", class_="date")
+        if not date_elem:
+            log.warning("Cobas: no se encontró p.date")
+            return None
+
+        date_text = date_elem.get_text(strip=True)    # "Fecha valor liquidativo: 30-4-2026"
+        # Extraer solo la parte después de ":"
+        match = re.search(r":\s*(\d{1,2}-\d{1,2}-\d{4})", date_text)
         if not match:
-            log.warning("Cobas: no se pudo extraer el JSON del product-block")
+            log.warning("Cobas: formato de fecha no reconocido en %s", date_text)
             return None
 
-        raw_json = match.group(1)
-        # Limpiar escapes típicos de plantillas literales de JS
-        cleaned = raw_json.replace('\\"', '"').replace('\\\\', '\\')
-        data = json.loads(cleaned)
-        products = data.get("data", [])
-
-        for prod in products:
-            if prod.get("key") != product_id:
-                continue
-
-            info = prod.get("product_profit_info", {})
-            raw_value = (info.get("liquidative_value") or "").strip()
-            raw_date  = (info.get("liquidative_date") or "").strip()
-            if not raw_value or not raw_date:
-                continue
-
-            # Precio: "176,540000 €" → 176.540000
-            price_str = re.sub(r"[^\d,]", "", raw_value).replace(",", ".")
+        raw_date = match.group(1)
+        try:
+            dt = datetime.strptime(raw_date, "%d-%m-%Y")
+        except ValueError:
+            # reintento con día/mes sin cero (ya debería funcionar con %d-%m-%Y)
+            parts = raw_date.split("-")
+            if len(parts) != 3:
+                return None
             try:
-                price = float(price_str)
-            except ValueError:
-                continue
+                day, month, year = int(parts[0]), int(parts[1]), int(parts[2])
+                dt = datetime(year, month, day)
+            except Exception:
+                return None
 
-            # Fecha: "30-4-2026" → 2026-04-30
-            try:
-                dt = datetime.strptime(raw_date, "%d-%m-%Y")
-            except ValueError:
-                # intentamos con partes por si hay días sin cero
-                parts = raw_date.split("-")
-                if len(parts) != 3:
-                    continue
-                try:
-                    day, month, year = int(parts[0]), int(parts[1]), int(parts[2])
-                    dt = datetime(year, month, day)
-                except Exception:
-                    continue
+        return (dt.strftime("%Y-%m-%d"), nav)
 
-            return (dt.strftime("%Y-%m-%d"), price)
-
-        return None
     except Exception as e:
-        log.error("Cobas: error extrayendo precio actual: %s", e, exc_info=True)
+        log.error("Cobas: error en extracción HTML: %s", e, exc_info=True)
         return None
 
 
-# ---------------------------------------------------------------------------
 def scrape_cobas_prices(
     session,
     cobas_url: str,
 ) -> List[Tuple[str, float]]:
     """
-    Obtiene el último valor liquidativo desde la ficha de producto de Cobas AM.
-
-    La web de Cobas requiere cookies de consentimiento para mostrar el HTML
-    completo. Este scraper envía la cookie CookieConsent con todas las
-    categorías aceptadas para obtener la página real.
-
-    Dado que la API pública (api.cobasam.com) no es accesible desde fuera
-    y solo devuelve el NAV más reciente, este scraper se limita al último
-    precio disponible. Para histórico completo deben usarse otras fuentes
-    (FT, Yahoo Finance, etc.).
+    Obtiene el último valor liquidativo directamente de la ficha de producto
+    de Cobas AM, extrayendo el HTML visible.
 
     Args:
         session: requests.Session con reintentos.
         cobas_url: URL de la ficha del producto (ej. .../lux_international_eur/).
 
     Returns:
-        Lista de tuplas (fecha ISO "YYYY-MM-DD", precio). Vacía si falla.
+        Lista de una tupla (fecha ISO "YYYY-MM-DD", precio) o lista vacía.
     """
     if not cobas_url or not cobas_url.startswith("http"):
         return []
 
-    product_id = _extract_product_id_from_url(cobas_url)
-    if not product_id:
-        log.warning("Cobas: no se pudo extraer product_id de %s", cobas_url)
-        return []
-
-    # ── Obtener HTML completo enviando la cookie de consentimiento ────────
     try:
         resp = session.get(
             cobas_url,
             headers={
                 "Cookie": COOKIEBOT_CONSENT_COOKIE,
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                              "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
                 "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
             },
             timeout=25,
@@ -153,10 +116,10 @@ def scrape_cobas_prices(
         log.error("Cobas: error HTTP %s: %s", cobas_url, e)
         return []
 
-    current = _current_price_from_html(html, product_id)
-    if current:
-        log.info("Cobas: NAV obtenido de %s → %s = %s", cobas_url, current[0], current[1])
-        return [current]
+    result = _extract_from_page(html)
+    if result:
+        log.info("Cobas: NAV obtenido de %s → %s = %s", cobas_url, result[0], result[1])
+        return [result]
 
     log.warning("Cobas: no se pudo extraer el precio de %s", cobas_url)
     return []
