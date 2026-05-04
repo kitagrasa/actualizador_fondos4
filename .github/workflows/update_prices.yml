@@ -9,13 +9,14 @@ jobs:
   update:
     runs-on: ubuntu-24.04
     permissions:
-      contents: write          # <--- ESTO ES LO QUE FALTA
+      contents: write          # Permiso para hacer push
+
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true   # Elimina avisos de Node.js 20
 
     steps:
       - name: Checkout código
         uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Configurar Python
         uses: actions/setup-python@v5
@@ -26,6 +27,16 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install -r requirements.txt
+
+      - name: Verificar que el secreto FUNDS_CSV_URL existe
+        env:
+          FUNDS_CSV_URL: ${{ secrets.FUNDS_CSV_URL }}
+        run: |
+          if [ -z "$FUNDS_CSV_URL" ]; then
+            echo "ERROR: El secreto FUNDS_CSV_URL está vacío o no existe."
+            exit 1
+          fi
+          echo "Secreto FUNDS_CSV_URL verificado correctamente."
 
       - name: Ejecutar actualizador
         env:
