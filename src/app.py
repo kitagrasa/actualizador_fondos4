@@ -13,7 +13,6 @@ from .portfolio import read_prices_json, write_prices_json_if_changed
 from .utils import setup_logging, json_dumps_canonical
 from .scrapers.ft_scraper import scrape_ft_prices
 from .scrapers.fundsquare_scraper import scrape_fundsquare_prices
-from .scrapers.investing_scraper import scrape_investing_prices
 from .scrapers.ariva_scraper import scrape_ariva_prices
 from .scrapers.yahoo_finance_scraper import scrape_yahoo_finance_prices
 from .scrapers.cobas_scraper import scrape_cobas_prices   # <-- NUEVO
@@ -134,15 +133,14 @@ def main() -> int:
         isin = f.isin
         ariva_url = getattr(f, "ariva_url", None)
         yahoo_url = getattr(f, "yahoo_url", None)
-        cobas_url = getattr(f, "cobas_url", None)          # <-- NUEVO
+        cobas_url = getattr(f, "cobas_url", None)
 
-        log.info("Procesando %s  FT=%s  FS=%s  INV=%s  ARV=%s  CB=%s  YF=%s",
+        log.info("Procesando %s  FT=%s  FS=%s  ARV=%s  CB=%s  YF=%s",
                  isin,
                  getattr(f, "ft_url", "—") or "—",
                  getattr(f, "fundsquare_url", "—") or "—",
-                 getattr(f, "investing_url", "—") or "—",
                  ariva_url or "—",
-                 cobas_url or "—",                           # <-- NUEVO
+                 cobas_url or "—",
                  yahoo_url or "—")
 
         existing_path = PRICES_DIR / f"{isin}.json"
@@ -163,9 +161,9 @@ def main() -> int:
             yf_prices, yf_meta = scrape_yahoo_finance_prices(
                 session,
                 yahoo_url,
-                startdate=None,        # <-- No recorta fechas antiguas
+                startdate=None,
                 enddate=today,
-                full_refresh=True,     # <-- Pide siempre 10 años a Yahoo
+                full_refresh=True,
             )
 
         # ── FT ───────────────────────────────────────────────────────────────
@@ -180,25 +178,6 @@ def main() -> int:
         # ── Fundsquare ────────────────────────────────────────────────────────
         fs_prices = scrape_fundsquare_prices(session, getattr(f, "fundsquare_url", None))
 
-        # ── Investing ─────────────────────────────────────────────────────────
-        cached_pair_id = fmeta.get("investing_pair_id") or None
-        inv_result = scrape_investing_prices(
-            session,
-            getattr(f, "investing_url", None),
-            cached_pair_id=cached_pair_id,
-            startdate=start,
-            enddate=today,
-            fullrefresh=do_full,
-        )
-        if isinstance(inv_result, tuple) and len(inv_result) == 2:
-            inv_prices, inv_pair_id = inv_result
-        else:
-            inv_prices, inv_pair_id = (inv_result or []), None
-
-        if inv_pair_id and fmeta.get("investing_pair_id") != inv_pair_id:
-            fmeta["investing_pair_id"] = inv_pair_id
-            any_changed = True
-
         # ── Ariva ─────────────────────────────────────────────────────────────
         ariva_prices_tuples = []
         if ariva_url:
@@ -211,18 +190,17 @@ def main() -> int:
                     else:
                         ariva_prices_tuples = raw_ariva
 
-        # ── Cobas ─────────────────────────────────────────────────────────────   <-- NUEVO BLOQUE
+        # ── Cobas ─────────────────────────────────────────────────────────────
         cobas_prices = scrape_cobas_prices(session, cobas_url)
 
         # ── Merge y guardado ──────────────────────────────────────────────────
-        # Prioridad (el último sobrescribe): Yahoo → Ariva → Investing → Fundsquare → Cobas → FT
+        # Prioridad (el último sobrescribe): Yahoo → Ariva → Fundsquare → Cobas → FT
         merged = merge_updates(
             existing,
             yf_prices,
             ariva_prices_tuples,
-            inv_prices,
             fs_prices,
-            cobas_prices,           # <-- Cobas entra aquí
+            cobas_prices,
             ft_prices,
         )
 
@@ -236,9 +214,8 @@ def main() -> int:
         for key, val in [
             ("ft_url",         getattr(f, "ft_url", None)),
             ("fundsquare_url", getattr(f, "fundsquare_url", None)),
-            ("investing_url",  getattr(f, "investing_url", None)),
             ("ariva_url",      ariva_url),
-            ("cobas_url",      cobas_url),     # <-- NUEVO
+            ("cobas_url",      cobas_url),
             ("yahoo_url",      yahoo_url),
         ]:
             if val and fmeta.get(key) != val:
