@@ -1,42 +1,45 @@
-name: Actualizar precios fondos
+name: Actualizar precios de fondos
 
 on:
   schedule:
-    # Ejecutar cada día a las 18:00 UTC (ejemplo)
-    - cron: '0 18 * * *'
-  workflow_dispatch:   # permite lanzarlo manualmente
-
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true   # forzar Node 24 ya
+    - cron: '0 6 * * 1-5'   # Lunes a viernes a las 06:00 UTC
+  workflow_dispatch:          # Permite ejecución manual
 
 jobs:
   update:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write          # <--- ESTO ES LO QUE FALTA
+
     steps:
       - name: Checkout código
-        uses: actions/checkout@v5      # ← actualizado
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Configurar Python
-        uses: actions/setup-python@v6  # ← actualizado
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: '3.11'
 
       - name: Instalar dependencias
         run: |
+          pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Ejecutar orquestador
+      - name: Ejecutar actualizador
         env:
           FUNDS_CSV_URL: ${{ secrets.FUNDS_CSV_URL }}
-          FULLREFRESH: "0"
-          LOOKBACK_DAYS: "14"
-          # Si usas FlareProx, añade también FLAREPROX_URL
-        run: python -m src.app
+        run: python src/app.py
 
-      - name: Commit y push de cambios (opcional)
-        if: success()
+      - name: Commit y push si hay cambios
         run: |
           git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/prices/ data/funds_metadata.json
-          git diff --staged --quiet || (git commit -m "Actualización automática de precios" && git push)
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --staged --quiet; then
+            echo "Sin cambios que subir."
+          else
+            git commit -m "Actualización automática de precios"
+            git push
+          fi
