@@ -87,7 +87,8 @@ def merge_updates(
     """Cada fuente sobrescribe por fecha. El último que escribe gana."""
     out = dict(existing)
     for source in sources:
-        if not source: continue
+        if not source:
+            continue
         for d, c in source:
             out[d] = c
     return out
@@ -215,15 +216,16 @@ def main() -> int:
         cobas_prices = scrape_cobas_prices(session, cobas_url)
 
         # ── Merge y guardado ──────────────────────────────────────────────────
-        # Prioridad (el último sobrescribe): Yahoo → Ariva → Investing → Fundsquare → Cobas → FT
+        # NUEVA PRIORIDAD (el último sobrescribe):
+        # Investing → Ariva → Fundsquare → FT → Yahoo → Cobas
         merged = merge_updates(
             existing,
-            yf_prices,
-            ariva_prices_tuples,
-            inv_prices,
-            fs_prices,
-            cobas_prices,           # <-- Cobas entra aquí
-            ft_prices,
+            inv_prices,           # prioridad más baja → Investing
+            ariva_prices_tuples,  # Ariva
+            fs_prices,            # Fundsquare
+            ft_prices,            # FT
+            yf_prices,            # Yahoo Finance
+            cobas_prices,         # prioridad más alta → Cobas
         )
 
         if write_prices_json_if_changed(existing_path, merged):
