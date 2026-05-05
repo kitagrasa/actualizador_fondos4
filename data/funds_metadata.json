@@ -21,6 +21,7 @@
       "yahoo_url": "https://es.finance.yahoo.com/quote/0P00016YQ5.F/history/"
     },
     "ES0119207001": {
+      "cobas_url": "https://www.cobasam.com/productos/inversion-libre/cobas_renta/",
       "currency": "EUR",
       "ft_url": "https://markets.ft.com/data/funds/tearsheet/historical?s=ES0119207001:EUR",
       "name": "Cobas Renta FI",
