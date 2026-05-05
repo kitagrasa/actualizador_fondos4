@@ -87,16 +87,6 @@
       "fundsquare_url": "https://www.fundsquare.net/security/histo-prices?idInstr=58329",
       "name": "Robeco QI Emerging Markets Active Equities D €"
     },
-    "LU0524465548": {
-      "currency": "EUR",
-      "ft_symbol": "LU0524465548",
-      "ft_url": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU0524465548:EUR",
-      "fundsquare_idInstr": "159836",
-      "fundsquare_url": "https://www.fundsquare.net/security/histo-prices?idInstr=159836",
-      "investing_pair_id": "1238609",
-      "investing_url": "https://es.investing.com/funds/lu0524465548-historical-data",
-      "name": "Alken Fund - Small Cap Europe Class A"
-    },
     "LU0563745743": {
       "currency": "EUR",
       "ft_symbol": "LU0563745743",
