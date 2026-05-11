@@ -64,6 +64,13 @@
       "yahoo_symbol": "0P0001AJ8L.F",
       "yahoo_url": "https://es.finance.yahoo.com/quote/0P0001AJ8L.F/history/"
     },
+    "IE00BZ4D7648": {
+      "currency": "EUR",
+      "ft_url": "https://markets.ft.com/data/funds/tearsheet/historical?s=IE00BZ4D7648:EUR",
+      "name": "Polar Capital Funds PLC - Polar Capital Global Technology Fund R EUR Hedged Accumulation",
+      "yahoo_symbol": "0P0001ANEI.F",
+      "yahoo_url": "https://finance.yahoo.com/quote/0P0001ANEI.F/history/"
+    },
     "LU0171306680": {
       "ariva_url": "https://www.ariva.de/fonds/blackrock-global-funds-world-gold-fund-e2-eur/kurse/historische-kurse",
       "currency": "EUR",
