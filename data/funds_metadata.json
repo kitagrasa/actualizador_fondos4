@@ -64,6 +64,13 @@
       "yahoo_symbol": "0P0001AJ8L.F",
       "yahoo_url": "https://es.finance.yahoo.com/quote/0P0001AJ8L.F/history/"
     },
+    "IE00BJM0B969": {
+      "currency": "EUR",
+      "ft_url": "https://markets.ft.com/data/funds/tearsheet/historical?s=IE00BJM0B969:EUR",
+      "name": "Blue Whale Investment Funds ICAV - Blue Whale Growth Fund EUR R Class",
+      "yahoo_symbol": "0P0001IVQH.F",
+      "yahoo_url": "https://es.finance.yahoo.com/quote/0P0001IVQH.F/history/"
+    },
     "IE00BZ4D7648": {
       "currency": "EUR",
       "ft_url": "https://markets.ft.com/data/funds/tearsheet/historical?s=IE00BZ4D7648:EUR",
