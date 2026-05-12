@@ -58,6 +58,7 @@
       "yahoo_url": "https://finance.yahoo.com/quote/WCOM.L/history/"
     },
     "IE00BH6XSF26": {
+      "ariva_url": "https://www.ariva.de/fonds/kopernik-global-all-cap-equity-fund-a-eur/kurse/historische-kurse",
       "currency": "EUR",
       "ft_url": "https://markets.ft.com/data/funds/tearsheet/historical?s=IE00BH6XSF26:EUR",
       "name": "Heptagon Fund ICAV - Kopernik Global All-Cap Equity Fund AE EUR Acc",
@@ -177,6 +178,15 @@
       "ft_url": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU2145461757:EUR",
       "fundsquare_url": "https://www.fundsquare.net/security/histo-prices?idInstr=369173",
       "name": "Robeco Smart Energy D-EUR Capitalisation"
+    },
+    "LU2262945038": {
+      "ariva_url": "https://www.ariva.de/fonds/sissener-sicav-sissener-corporate-bond-fd-eur-rf/kurse/historische-kurse",
+      "currency": "EUR",
+      "ft_url": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU2262945038:EUR",
+      "fundsquare_url": "https://www.fundsquare.net/security/price?idInstr=383694",
+      "name": "Sissener SICAV - Sissener Corporate Bond Fund RF EUR",
+      "yahoo_symbol": "0P0001LK3H.F",
+      "yahoo_url": "https://es.finance.yahoo.com/quote/0P0001LK3H.F/history/"
     }
   }
 }
