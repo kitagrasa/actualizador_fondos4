@@ -16,6 +16,7 @@ from .scrapers.fundsquare_scraper import scrape_fundsquare_prices
 from .scrapers.ariva_scraper import scrape_ariva_prices
 from .scrapers.yahoo_finance_scraper import scrape_yahoo_finance_prices
 from .scrapers.cobas_scraper import scrape_cobas_prices
+from .scrapers.polar_capital_scraper import scrape_polar_capital_prices  # <-- NUEVO
 
 ROOT       = Path(__file__).resolve().parents[1]
 DATA_DIR   = ROOT / "data"
@@ -39,7 +40,7 @@ def load_metadata() -> Dict:
             data["funds"] = {}
         return data
     except Exception:
-        return {"funds": {}}
+        return {"funds": {}
 
 
 def save_metadata_if_changed(meta: Dict) -> bool:
@@ -142,14 +143,16 @@ def main() -> int:
         ariva_url = getattr(f, "ariva_url", None)
         yahoo_url = getattr(f, "yahoo_url", None)
         cobas_url = getattr(f, "cobas_url", None)
+        polar_url = getattr(f, "polar_url", None)   # <-- NUEVO
 
-        log.info("Procesando %s  FT=%s  FS=%s  ARV=%s  CB=%s  YF=%s",
+        log.info("Procesando %s  FT=%s  FS=%s  ARV=%s  CB=%s  YF=%s  PL=%s",
                  isin,
                  getattr(f, "ft_url", "—") or "—",
                  getattr(f, "fundsquare_url", "—") or "—",
                  ariva_url or "—",
                  cobas_url or "—",
-                 yahoo_url or "—")
+                 yahoo_url or "—",
+                 polar_url or "—")   # <-- NUEVO
 
         existing_path = PRICES_DIR / f"{isin}.json"
         existing      = read_prices_json(existing_path)
@@ -169,9 +172,9 @@ def main() -> int:
             yf_prices, yf_meta = scrape_yahoo_finance_prices(
                 session,
                 yahoo_url,
-                startdate=None,        # No recortamos fechas antiguas
+                startdate=None,
                 enddate=today,
-                full_refresh=True,     # Pide siempre 10 años a Yahoo
+                full_refresh=True,
             )
 
         # ── FT (Financial Times) ────────────────────────────────────────────
@@ -201,9 +204,12 @@ def main() -> int:
         # ── Cobas AM (fuente oficial) ──────────────────────────────────────
         cobas_prices = scrape_cobas_prices(session, cobas_url)
 
+        # ── Polar Capital (nuevo) ──────────────────────────────────────────
+        polar_prices = scrape_polar_capital_prices(session, polar_url) if polar_url else []   # <-- NUEVO
+
         # ── Merge y guardado ───────────────────────────────────────────────
         # Prioridad (el último sobrescribe a los anteriores):
-        # Ariva → Fundsquare → FT → Yahoo → Cobas
+        # Ariva → Fundsquare → FT → Yahoo → Cobas → Polar Capital
         merged = merge_updates(
             existing,
             ariva_prices_tuples,   # prioridad más baja
@@ -211,6 +217,7 @@ def main() -> int:
             ft_prices,             # FT
             yf_prices,             # Yahoo Finance (red de seguridad)
             cobas_prices,          # prioridad más alta → Cobas
+            polar_prices,          # nueva prioridad máxima → Polar Capital
         )
 
         if write_prices_json_if_changed(existing_path, merged):
@@ -226,6 +233,7 @@ def main() -> int:
             ("ariva_url",      ariva_url),
             ("cobas_url",      cobas_url),
             ("yahoo_url",      yahoo_url),
+            ("polar_url",      polar_url),   # <-- NUEVO
         ]:
             if val and fmeta.get(key) != val:
                 fmeta[key] = val
