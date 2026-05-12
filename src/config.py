@@ -19,6 +19,7 @@ class FundConfig:
     ariva_url: str       # Vacío → salta Ariva
     yahoo_url: str       # Vacío → salta Yahoo Finance
     cobas_url: str       # Vacío → salta Cobas AM
+    polar_url: str       # Vacío → salta Polar Capital (NUEVO)
 
 
 def load_funds_csv(path_or_url: str | Path) -> List[FundConfig]:
@@ -36,7 +37,6 @@ def load_funds_csv(path_or_url: str | Path) -> List[FundConfig]:
             )
             resp.raise_for_status()
             content = resp.text
-            # Eliminar BOM (carácter invisible que Google a veces añade)
             if content.startswith('\ufeff'):
                 content = content[1:]
             lines = content.splitlines()
@@ -60,7 +60,6 @@ def load_funds_csv(path_or_url: str | Path) -> List[FundConfig]:
         log.error("El origen de datos está vacío o no se pudo descargar.")
         return []
 
-    # Usar csv.DictReader con las líneas limpias
     reader = csv.DictReader(lines)
     if reader.fieldnames is None:
         log.error("El CSV no tiene cabeceras.")
@@ -89,6 +88,7 @@ def load_funds_csv(path_or_url: str | Path) -> List[FundConfig]:
             ariva_url=(row.get("ariva_url") or "").strip(),
             yahoo_url=(row.get("yahoo_url") or "").strip(),
             cobas_url=(row.get("cobas_url") or "").strip(),
+            polar_url=(row.get("polar_url") or "").strip(),   # NUEVO
         ))
 
     # Deduplicar por ISIN (última línea gana)
