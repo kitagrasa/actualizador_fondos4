@@ -20,7 +20,7 @@ from .utils import setup_logging, json_dumps_canonical
 from .scrapers.ft_scraper import scrape_ft_prices
 from .scrapers.fundsquare_scraper import scrape_fundsquare_prices
 from .scrapers.ariva_scraper import scrape_ariva_prices
-from .scrapers.yahoofinance_scraper import scrape_yahoo_finance_prices
+from .scrapers.yahoo_finance_scraper import scrape_yahoo_finance_prices
 from .scrapers.cobas_scraper import scrape_cobas_prices
 from .scrapers.generic_scraper import scrape_generic_prices
 
