@@ -16,6 +16,8 @@
     "ES0112611001": {
       "currency": "EUR",
       "ft_url": "https://markets.ft.com/data/funds/tearsheet/historical?s=ES0112611001:EUR",
+      "generic_selector": "#azv-rentabilidad-esp > div.elementor-element.elementor-element-535971b.e-con-full.e-flex.e-con.e-child > div.elementor-element.elementor-element-68b4a9a.e-con-full.e-flex.e-con.e-child > div.elementor-element.elementor-element-3f1ec24.elementor-widget__width-initial.elementor-widget.elementor-widget-icon-box > div > div > div > div > span",
+      "generic_url": "https://www.azvalor.com/fondos-de-inversion/azvalor-internacional/",
       "name": "Azvalor Internacional FI",
       "yahoo_symbol": "0P00016YQ5.F",
       "yahoo_url": "https://es.finance.yahoo.com/quote/0P00016YQ5.F/history/"
