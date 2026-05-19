@@ -88,7 +88,7 @@ def cleanup_removed_funds(active_isins: List[str], meta: Dict) -> bool:
 
 def merge_updates(
     existing: Dict[str, float],
-    *sources: Optional[List[Tuple[str, float]]],
+    *sources,
 ) -> Dict[str, float]:
     """
     Fusiona el histórico existente con los datos de nuevas fuentes.
@@ -99,8 +99,17 @@ def merge_updates(
     for source in sources:
         if not source:
             continue
-        for date_str, price in source:
-            result[date_str] = price
+        for item in source:
+            # Acepta tanto tuplas (fecha, precio) como dicts {date:..., close:...}
+            if isinstance(item, dict):
+                date_str = item.get("date")
+                price = item.get("close")
+            elif isinstance(item, (list, tuple)) and len(item) == 2:
+                date_str, price = item
+            else:
+                continue
+            if date_str and price is not None:
+                result[date_str] = price
     return result
 
 
@@ -146,7 +155,6 @@ def main() -> int:
         cobas_url = fund.cobasurl or None
         generic_url = fund.genericurl or None
         generic_selector = fund.genericselector or None
-        # ← NUEVO: selector CSS de la fecha publicada en la web
         generic_selector_fecha = fund.genericselectorfecha or None
 
         log.info(
@@ -172,16 +180,14 @@ def main() -> int:
         )
 
         # 0. Scraper genérico (mínima prioridad)
-        # ← CORRECCIÓN BUG: se pasa selector_fecha para que la web aporte su propia fecha
         generic_prices = []
         if generic_url and generic_selector:
-            result = scrape_generic_prices(
+            generic_prices = scrape_generic_prices(
                 session=session,
                 url=generic_url,
                 selector=generic_selector,
-                selector_fecha=generic_selector_fecha,  # ← NUEVO PARÁMETRO
+                selector_fecha=generic_selector_fecha,
             )
-            generic_prices = result if result else []
 
         # 1. Yahoo Finance (siempre pide 10 años: red de seguridad)
         yf_prices, yf_meta = [], {}
@@ -189,19 +195,21 @@ def main() -> int:
             yf_prices, yf_meta = scrape_yahoo_finance_prices(
                 session,
                 yahoo_url,
-                start_date=None,
-                end_date=today,
-                full_refresh=True,
+                startdate=None,
+                enddate=today,
+                fullrefresh=True,
             )
 
         # 2. Financial Times (incremental o completo)
-        ft_prices, ft_meta = scrape_ft_prices(
-            session,
-            fund.fturl,
-            start_date=start_date,
-            end_date=today,
-            full_refresh=do_full,
-        )
+        ft_prices, ft_meta = [], {}
+        if fund.fturl:
+            ft_prices, ft_meta = scrape_ft_prices(
+                session,
+                fund.fturl,
+                startdate=start_date,
+                enddate=today,
+                fullrefresh=do_full,
+            )
 
         # 3. Fundsquare
         fs_prices = scrape_fundsquare_prices(session, fund.fundsquareurl)
@@ -252,7 +260,7 @@ def main() -> int:
             ("yahoourl", yahoo_url),
             ("genericurl", generic_url),
             ("genericselector", generic_selector),
-            ("genericselectorfecha", generic_selector_fecha),  # ← NUEVO
+            ("genericselectorfecha", generic_selector_fecha),
         ]:
             if val and f_meta.get(key) != val:
                 f_meta[key] = val
