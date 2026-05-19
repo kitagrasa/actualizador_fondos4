@@ -3,3 +3,6 @@ urllib3>=2.0.0
 beautifulsoup4>=4.12.0
 lxml>=4.9.0
 curl_cffi>=0.7.0
+# playwright es OPCIONAL — solo para webs con JavaScript crítico
+# Para activarlo: pip install playwright && playwright install chromium
+# playwright>=1.40.0
