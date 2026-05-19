@@ -1,61 +1,142 @@
 {
   "funds": {
-    "CA26139R1091": {},
+    "CA26139R1091": {
+      "arivaurl": "https://www.ariva.de/aktien/dpm-metals-inc-aktie/kurse/historische-kurse?boerse_id=83",
+      "currency": "USD",
+      "yahoourl": "https://es.finance.yahoo.com/quote/DPMLF/history/"
+    },
     "ES0112609005": {
-      "genericselectorfecha": "#azv-rentabilidad-esp > div.elementor-element.elementor-element-535971b.e-con-full.e-flex.e-con.e-child > div.elementor-element.elementor-element-6dd099a.e-con-full.e-flex.e-con.e-child > div.elementor-element.elementor-element-b1d58c6.elementor-widget__width-initial.elementor-widget.elementor-widget-icon-box > div > div > div > p"
+      "currency": "EUR",
+      "fturl": "https://markets.ft.com/data/funds/tearsheet/historical?s=ES0112609005:EUR",
+      "genericselector": "#azv-rentabilidad-esp > div.elementor-element.elementor-element-535971b.e-con-full.e-flex.e-con.e-child > div.elementor-element.elementor-element-68b4a9a.e-con-full.e-flex.e-con.e-child > div.elementor-element.elementor-element-3f1ec24.elementor-widget__width-initial.elementor-widget.elementor-widget-icon-box > div > div > div > div > span",
+      "genericselectorfecha": "#azv-rentabilidad-esp > div.elementor-element.elementor-element-535971b.e-con-full.e-flex.e-con.e-child > div.elementor-element.elementor-element-6dd099a.e-con-full.e-flex.e-con.e-child > div.elementor-element.elementor-element-b1d58c6.elementor-widget__width-initial.elementor-widget.elementor-widget-icon-box > div > div > div > p",
+      "genericurl": "https://www.azvalor.com/fondos-de-inversion/blue-chips-fi/",
+      "name": "Azvalor Blue Chips FI",
+      "yahoourl": "https://es.finance.yahoo.com/quote/0P00019O2I.F/history/"
     },
     "ES0112611001": {
-      "genericselectorfecha": "#azv-rentabilidad-esp > div.elementor-element.elementor-element-535971b.e-con-full.e-flex.e-con.e-child > div.elementor-element.elementor-element-6dd099a.e-con-full.e-flex.e-con.e-child > div.elementor-element.elementor-element-b1d58c6.elementor-widget__width-initial.elementor-widget.elementor-widget-icon-box > div > div > div > p"
+      "currency": "EUR",
+      "fturl": "https://markets.ft.com/data/funds/tearsheet/historical?s=ES0112611001:EUR",
+      "genericselector": "#azv-rentabilidad-esp > div.elementor-element.elementor-element-535971b.e-con-full.e-flex.e-con.e-child > div.elementor-element.elementor-element-68b4a9a.e-con-full.e-flex.e-con.e-child > div.elementor-element.elementor-element-3f1ec24.elementor-widget__width-initial.elementor-widget.elementor-widget-icon-box > div > div > div > div > span",
+      "genericselectorfecha": "#azv-rentabilidad-esp > div.elementor-element.elementor-element-535971b.e-con-full.e-flex.e-con.e-child > div.elementor-element.elementor-element-6dd099a.e-con-full.e-flex.e-con.e-child > div.elementor-element.elementor-element-b1d58c6.elementor-widget__width-initial.elementor-widget.elementor-widget-icon-box > div > div > div > p",
+      "genericurl": "https://www.azvalor.com/fondos-de-inversion/azvalor-internacional/",
+      "name": "Azvalor Internacional FI",
+      "yahoourl": "https://es.finance.yahoo.com/quote/0P00016YQ5.F/history/"
     },
-    "ES0119207001": {},
-    "ES0140794001": {},
-    "ES0175224031": {},
+    "ES0119207001": {
+      "cobasurl": "https://www.cobasam.com/productos/inversion-libre/cobas_renta/",
+      "currency": "EUR",
+      "fturl": "https://markets.ft.com/data/funds/tearsheet/historical?s=ES0119207001:EUR",
+      "name": "Cobas Renta FI",
+      "yahoourl": "https://es.finance.yahoo.com/quote/0P00019W2S.F/history/"
+    },
+    "ES0140794001": {
+      "currency": "EUR",
+      "fturl": "https://markets.ft.com/data/funds/tearsheet/historical?s=ES0140794001:EUR",
+      "name": "Gamma Global A FI",
+      "yahoourl": "https://es.finance.yahoo.com/quote/0P0001MABK.F/history/"
+    },
+    "ES0175224031": {
+      "currency": "EUR",
+      "fturl": "https://markets.ft.com/data/funds/tearsheet/historical?s=ES0175224031:EUR",
+      "name": "Santander Small Caps España A FI",
+      "yahoourl": "https://es.finance.yahoo.com/quote/0P000017PK.F/history/"
+    },
     "FR0010930644": {
-      "investing_url": "https://es.investing.com/etfs/amundi-etf-msci-europe-energy-historical-data?cid=45955"
+      "arivaurl": "https://www.ariva.de/etf/amundi-global-hydrogen-ucits-etf-acc/kurse/historische-kurse?boerse_id=45",
+      "currency": "EUR",
+      "fturl": "https://markets.ft.com/data/etfs/tearsheet/historical?s=AMEE:GER:EUR",
+      "investing_url": "https://es.investing.com/etfs/amundi-etf-msci-europe-energy-historical-data?cid=45955",
+      "name": "Amundi Global Hydrogen UCITS ETF - Acc"
     },
-    "IE00BG88WH84": {},
-    "IE00BH6XSF26": {},
-    "IE00BJM0B969": {},
-    "IE00BZ4D7648": {},
+    "IE00BG88WH84": {
+      "currency": "GBp",
+      "yahoourl": "https://finance.yahoo.com/quote/WCOM.L/history/"
+    },
+    "IE00BH6XSF26": {
+      "arivaurl": "https://www.ariva.de/fonds/kopernik-global-all-cap-equity-fund-a-eur/kurse/historische-kurse",
+      "currency": "EUR",
+      "fturl": "https://markets.ft.com/data/funds/tearsheet/historical?s=IE00BH6XSF26:EUR",
+      "name": "Heptagon Fund ICAV - Kopernik Global All-Cap Equity Fund AE EUR Acc",
+      "yahoourl": "https://es.finance.yahoo.com/quote/0P0001AJ8L.F/history/"
+    },
+    "IE00BJM0B969": {
+      "currency": "EUR",
+      "fturl": "https://markets.ft.com/data/funds/tearsheet/historical?s=IE00BJM0B969:EUR",
+      "name": "Blue Whale Investment Funds ICAV - Blue Whale Growth Fund EUR R Class",
+      "yahoourl": "https://es.finance.yahoo.com/quote/0P0001IVQH.F/history/"
+    },
+    "IE00BZ4D7648": {
+      "currency": "EUR",
+      "fturl": "https://markets.ft.com/data/funds/tearsheet/historical?s=IE00BZ4D7648:EUR",
+      "name": "Polar Capital Funds PLC - Polar Capital Global Technology Fund R EUR Hedged Accumulation",
+      "yahoourl": "https://finance.yahoo.com/quote/0P0001ANEI.F/history/"
+    },
     "LU0171306680": {
+      "arivaurl": "https://www.ariva.de/fonds/blackrock-global-funds-world-gold-fund-e2-eur/kurse/historische-kurse",
       "fundsquare_url": "https://www.fundsquare.net/security/histo-prices?idInstr=6401",
+      "fundsquareurl": "https://www.fundsquare.net/security/histo-prices?idInstr=6401",
       "investing_pair_id": "1036800",
       "investing_url": "https://es.investing.com/funds/world-gold-fund-e2e-historical-data"
     },
     "LU0223332320": {
       "currency": "EUR",
       "ft_url": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU0223332320:EUR",
+      "fturl": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU0223332320:EUR",
       "fundsquare_url": "https://www.fundsquare.net/security/histo-prices?idInstr=28356",
+      "fundsquareurl": "https://www.fundsquare.net/security/histo-prices?idInstr=28356",
       "name": "Multipartner SICAV - Konwave Gold Equity Fund B EUR"
     },
-    "LU0329355670": {},
+    "LU0329355670": {
+      "arivaurl": "https://www.ariva.de/fonds/robeco-qi-emerging-markets-active-equities-eur-d/kurse/historische-kurse?boerse_id=170",
+      "currency": "EUR",
+      "fturl": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU0329355670:EUR",
+      "name": "Robeco QI Emerging Markets Active Equities D €"
+    },
     "LU0563745743": {
       "currency": "EUR",
       "ft_url": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU0563745743:EUR",
+      "fturl": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU0563745743:EUR",
       "fundsquare_url": "https://www.fundsquare.net/security/histo-prices?idInstr=87217",
+      "fundsquareurl": "https://www.fundsquare.net/security/histo-prices?idInstr=87217",
       "name": "Bestinver Tordesillas SICAV Iberia A"
     },
     "LU1223083087": {
       "currency": "EUR",
       "ft_url": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU1223083087:EUR",
+      "fturl": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU1223083087:EUR",
       "fundsquare_url": "https://www.fundsquare.net/security/histo-prices?idInstr=248012",
+      "fundsquareurl": "https://www.fundsquare.net/security/histo-prices?idInstr=248012",
       "investing_pair_id": "1107198",
       "investing_url": "https://es.investing.com/funds/schroder-intlslct-glblgold-a-acceur-historical-data",
       "name": "Schroder International Selection Fund Global Gold A Accumulation EUR Hedged"
     },
-    "LU1372006947": {},
+    "LU1372006947": {
+      "cobasurl": "https://www.cobasam.com/productos/cobas-lux-sicav/lux_selection_eur/",
+      "currency": "EUR",
+      "fturl": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU1372006947:EUR",
+      "fundsquareurl": "https://www.fundsquare.net/security/histo-prices?idInstr=240088",
+      "name": "Cobas LUX SICAV - Cobas Selection Fund Class P Acc EUR",
+      "yahoourl": "https://es.finance.yahoo.com/quote/0P0001AF4X.F/history/"
+    },
     "LU1598719752": {
+      "cobasurl": "https://www.cobasam.com/productos/cobas-lux-sicav/lux_international_eur/",
       "currency": "EUR",
       "ft_url": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU1598719752:EUR",
+      "fturl": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU1598719752:EUR",
       "fundsquare_url": "https://www.fundsquare.net/security/histo-prices?idInstr=268050",
+      "fundsquareurl": "https://www.fundsquare.net/security/histo-prices?idInstr=268050",
       "investing_pair_id": "1177605",
       "investing_url": "https://es.investing.com/funds/lu1598719752-historical-data",
       "name": "Cobas LUX SICAV - Cobas International Fund-P Acc EUR"
     },
     "LU1598720172": {
+      "cobasurl": "https://www.cobasam.com/productos/cobas-lux-sicav/lux_large_cap_eur/",
       "currency": "EUR",
       "ft_url": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU1598720172:EUR",
+      "fturl": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU1598720172:EUR",
       "fundsquare_url": "https://www.fundsquare.net/security/histo-prices?idInstr=268051",
+      "fundsquareurl": "https://www.fundsquare.net/security/histo-prices?idInstr=268051",
       "investing_pair_id": "1177606",
       "investing_url": "https://es.investing.com/funds/lu1598720172-historical-data",
       "name": "Cobas LUX SICAV - Cobas Large Cap Fund-P Acc EUR"
@@ -63,7 +144,9 @@
     "LU1822851884": {
       "currency": "EUR",
       "ft_url": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU1822851884:EUR",
+      "fturl": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU1822851884:EUR",
       "fundsquare_url": "https://www.fundsquare.net/security/histo-prices?idInstr=328171",
+      "fundsquareurl": "https://www.fundsquare.net/security/histo-prices?idInstr=328171",
       "investing_pair_id": "1239517",
       "investing_url": "https://es.investing.com/funds/lu1822851884-historical-data",
       "name": "LUX MULTIMANAGER SICAV - Finserve Global Security Fund I EUR R"
@@ -71,12 +154,27 @@
     "LU1832174962": {
       "currency": "EUR",
       "ft_url": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU1832174962:EUR",
+      "fturl": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU1832174962:EUR",
       "fundsquare_url": "https://www.fundsquare.net/security/histo-prices?idInstr=310815",
+      "fundsquareurl": "https://www.fundsquare.net/security/histo-prices?idInstr=310815",
       "investing_pair_id": "1181284",
       "investing_url": "https://es.investing.com/funds/lu1832174962-historical-data",
       "name": "Indépendance AM Europe Small A (C)"
     },
-    "LU2145461757": {},
-    "LU2262945038": {}
+    "LU2145461757": {
+      "arivaurl": "https://www.ariva.de/fonds/robeco-smart-energy-d-eur/kurse/historische-kurse?boerse_id=170",
+      "currency": "EUR",
+      "fturl": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU2145461757:EUR",
+      "fundsquareurl": "https://www.fundsquare.net/security/histo-prices?idInstr=369173",
+      "name": "Robeco Smart Energy D-EUR Capitalisation"
+    },
+    "LU2262945038": {
+      "arivaurl": "https://www.ariva.de/fonds/sissener-sicav-sissener-corporate-bond-fd-eur-rf/kurse/historische-kurse",
+      "currency": "EUR",
+      "fturl": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU2262945038:EUR",
+      "fundsquareurl": "https://www.fundsquare.net/security/price?idInstr=383694",
+      "name": "Sissener SICAV - Sissener Corporate Bond Fund RF EUR",
+      "yahoourl": "https://es.finance.yahoo.com/quote/0P0001LK3H.F/history/"
+    }
   }
 }
