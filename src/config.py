@@ -9,7 +9,7 @@ import csv
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 import requests
 
@@ -18,14 +18,16 @@ log = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class FundConfig:
-    """Configuración de un fondo: ISIN y URLs de las distintas fuentes (FT, Fundsquare, Ariva, Yahoo, Cobas)."""
+    """Configuración de un fondo: ISIN y URLs de las distintas fuentes."""
     isin: str
-    ft_url: str          # Vacío → se omite Financial Times
-    fundsquare_url: str  # Vacío → se omite Fundsquare
-    investing_url: str   # Vacío → se omite Investing.com (aunque ya no se usa activamente)
-    ariva_url: str       # Vacío → se omite Ariva
-    yahoo_url: str       # Vacío → se omite Yahoo Finance
-    cobas_url: str       # Vacío → se omite Cobas AM
+    ft_url: str            # Vacío → se omite Financial Times
+    fundsquare_url: str    # Vacío → se omite Fundsquare
+    investing_url: str     # Vacío → se omite Investing.com (no se usa activamente)
+    ariva_url: str         # Vacío → se omite Ariva
+    yahoo_url: str         # Vacío → se omite Yahoo Finance
+    cobas_url: str         # Vacío → se omite Cobas AM
+    generic_url: str       # Vacío → se omite scraper genérico
+    generic_selector: str  # Selector CSS del elemento con el precio (ej: "div.each-data p.number")
 
 
 def _normalize_fieldnames(fieldnames: List[str]) -> List[str]:
@@ -48,8 +50,9 @@ def load_funds_csv(path_or_url: str | Path) -> List[FundConfig]:
     """
     Carga la configuración desde un CSV remoto (HTTP/HTTPS) o archivo local.
     El CSV debe contener al menos la columna 'isin'.
-    Las demás columnas esperadas: ft_url, fundsquare_url, investing_url, ariva_url, yahoo_url, cobas_url.
-    Retorna una lista de FundConfig (sin duplicados por ISIN, prevalece la última ocurrencia).
+    Columnas opcionales: ft_url, fundsquare_url, investing_url, ariva_url,
+                         yahoo_url, cobas_url, generic_url, generic_selector.
+    Retorna una lista de FundConfig (sin duplicados por ISIN).
     """
     path_str = str(path_or_url).strip()
     content = ""
@@ -98,8 +101,7 @@ def load_funds_csv(path_or_url: str | Path) -> List[FundConfig]:
         return []
 
     funds: List[FundConfig] = []
-    for row_num, row in enumerate(reader, start=2):  # start=2 porque línea 1 son cabeceras
-        # Ignorar filas completamente vacías
+    for row_num, row in enumerate(reader, start=2):
         if not any(row.values()):
             continue
 
@@ -116,6 +118,8 @@ def load_funds_csv(path_or_url: str | Path) -> List[FundConfig]:
             ariva_url=_get_column_value(row, "ariva_url"),
             yahoo_url=_get_column_value(row, "yahoo_url"),
             cobas_url=_get_column_value(row, "cobas_url"),
+            generic_url=_get_column_value(row, "generic_url"),
+            generic_selector=_get_column_value(row, "generic_selector"),
         ))
 
     # 3. Deduplicar por ISIN (la última ocurrencia sobrescribe a las anteriores)
