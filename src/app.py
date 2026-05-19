@@ -11,7 +11,7 @@ import logging
 import os
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 from .config import load_funds_csv
 from .http_client import build_session
@@ -49,7 +49,7 @@ def load_metadata() -> Dict:
 
 
 def save_metadata_if_changed(meta: Dict) -> bool:
-    """Guarda metadatos solo si ha habido cambios (evita escrituras innecesarias)."""
+    """Guarda metadatos solo si ha habido cambios."""
     META_FILE.parent.mkdir(parents=True, exist_ok=True)
     new_text = json_dumps_canonical(meta)
     old_text = META_FILE.read_text(encoding="utf-8") if META_FILE.exists() else None
@@ -60,10 +60,7 @@ def save_metadata_if_changed(meta: Dict) -> bool:
 
 
 def cleanup_removed_funds(active_isins: List[str], meta: Dict) -> bool:
-    """
-    Borra archivos JSON de precios y entradas en metadatos de ISINs
-    que ya no figuran en la configuración activa.
-    """
+    """Borra archivos JSON y metadatos de ISINs que ya no están en el CSV."""
     changed = False
     active_set = set(active_isins)
     PRICES_DIR.mkdir(parents=True, exist_ok=True)
@@ -86,10 +83,7 @@ def cleanup_removed_funds(active_isins: List[str], meta: Dict) -> bool:
     return changed
 
 
-def merge_updates(
-    existing: Dict[str, float],
-    *sources,
-) -> Dict[str, float]:
+def merge_updates(existing: Dict[str, float], *sources) -> Dict[str, float]:
     """
     Fusiona el histórico existente con los datos de nuevas fuentes.
     El último en la lista tiene máxima prioridad.
@@ -100,7 +94,6 @@ def merge_updates(
         if not source:
             continue
         for item in source:
-            # Acepta tanto tuplas (fecha, precio) como dicts {date:..., close:...}
             if isinstance(item, dict):
                 date_str = item.get("date")
                 price = item.get("close")
@@ -113,7 +106,7 @@ def merge_updates(
     return result
 
 
-def max_existing_date(existing: Dict[str, float]) -> Optional[date]:
+def max_existing_date(existing: Dict[str, float]):
     """Retorna la fecha más reciente del histórico actual, None si vacío."""
     if not existing:
         return None
@@ -182,14 +175,15 @@ def main() -> int:
         # 0. Scraper genérico (mínima prioridad)
         generic_prices = []
         if generic_url and generic_selector:
-            generic_prices = scrape_generic_prices(
+            result = scrape_generic_prices(
                 session=session,
                 url=generic_url,
                 selector=generic_selector,
                 selector_fecha=generic_selector_fecha,
             )
+            generic_prices = result if result else []
 
-        # 1. Yahoo Finance (siempre pide 10 años: red de seguridad)
+        # 1. Yahoo Finance — siempre 10 años como red de seguridad
         yf_prices, yf_meta = [], {}
         if yahoo_url:
             yf_prices, yf_meta = scrape_yahoo_finance_prices(
@@ -197,18 +191,18 @@ def main() -> int:
                 yahoo_url,
                 startdate=None,
                 enddate=today,
-                fullrefresh=True,
+                fullrefresh=True,       # <-- nombre exacto del parámetro en yahoo_finance_scraper.py
             )
 
-        # 2. Financial Times (incremental o completo)
+        # 2. Financial Times — incremental o completo
         ft_prices, ft_meta = [], {}
         if fund.fturl:
             ft_prices, ft_meta = scrape_ft_prices(
                 session,
                 fund.fturl,
-                startdate=start_date,
+                startdate=start_date,   # <-- nombre exacto del parámetro en ft_scraper.py
                 enddate=today,
-                fullrefresh=do_full,
+                fullrefresh=do_full,    # <-- nombre exacto del parámetro en ft_scraper.py
             )
 
         # 3. Fundsquare
@@ -233,7 +227,7 @@ def main() -> int:
         # 5. Cobas AM (máxima prioridad)
         cobas_prices = scrape_cobas_prices(session, cobas_url)
 
-        # Fusión: Generic (menor) → Ariva → Fundsquare → FT → Yahoo → Cobas (mayor)
+        # Fusión: Generic → Ariva → Fundsquare → FT → Yahoo → Cobas
         merged = merge_updates(
             existing,
             generic_prices,
