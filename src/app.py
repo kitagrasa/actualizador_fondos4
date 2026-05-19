@@ -191,7 +191,7 @@ def main() -> int:
                 yahoo_url,
                 startdate=None,
                 enddate=today,
-                fullrefresh=True,       # <-- nombre exacto del parámetro en yahoo_finance_scraper.py
+                full_refresh=True,   # ← CORREGIDO: antes era fullrefresh=True
             )
 
         # 2. Financial Times — incremental o completo
@@ -200,9 +200,9 @@ def main() -> int:
             ft_prices, ft_meta = scrape_ft_prices(
                 session,
                 fund.fturl,
-                startdate=start_date,   # <-- nombre exacto del parámetro en ft_scraper.py
+                startdate=start_date,
                 enddate=today,
-                fullrefresh=do_full,    # <-- nombre exacto del parámetro en ft_scraper.py
+                fullrefresh=do_full,
             )
 
         # 3. Fundsquare
