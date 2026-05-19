@@ -21,14 +21,17 @@ def _normalize_field_names(fieldnames: List[str]) -> List[str]:
     return [fn.strip().lower() for fn in fieldnames if fn]
 
 
-def _get_column_value(row: dict, key: str) -> str:
+def _get_column_value(row: dict, *keys: str) -> str:
     """
-    Obtiene el valor de una columna buscando por nombre normalizado.
-    Si la columna no existe, devuelve cadena vacía.
+    Obtiene el valor de una columna buscando por múltiples nombres posibles
+    (normalizado a minúsculas). Si ninguna coincide, devuelve cadena vacía.
+    Así soporta tanto 'fturl' como 'ft_url', 'FT_URL', etc.
     """
     for k, v in row.items():
-        if k.strip().lower() == key:
-            return (v or "").strip()
+        k_norm = k.strip().lower()
+        for key in keys:
+            if k_norm == key.strip().lower():
+                return (v or "").strip()
     return ""
 
 
@@ -36,23 +39,21 @@ def _get_column_value(row: dict, key: str) -> str:
 class FundConfig:
     """Configuración de un fondo: ISIN y URLs de las distintas fuentes."""
     isin: str
-    fturl: str                  # Vacío → se omite (Financial Times)
-    fundsquareurl: str          # Vacío → se omite (Fundsquare)
-    investingurl: str           # Vacío → se omite (Investing.com, no activo)
-    arivaurl: str               # Vacío → se omite (Ariva)
-    yahoourl: str               # Vacío → se omite (Yahoo Finance)
-    cobasurl: str               # Vacío → se omite (Cobas AM)
-    genericurl: str             # Vacío → se omite (scraper genérico)
-    genericselector: str        # Selector CSS del precio
-    genericselectorfecha: str   # ← NUEVO: Selector CSS de la fecha publicada en la web
+    fturl: str               # Financial Times
+    fundsquareurl: str       # Fundsquare
+    investingurl: str        # Investing.com (no activo)
+    arivaurl: str            # Ariva
+    yahoourl: str            # Yahoo Finance
+    cobasurl: str            # Cobas AM
+    genericurl: str          # Scraper genérico
+    genericselector: str     # Selector CSS del precio
+    genericselectorfecha: str  # Selector CSS de la fecha publicada en la web
 
 
 def load_funds_csv(path_or_url: str | Path) -> List[FundConfig]:
     """
     Carga la configuración desde un CSV remoto (HTTP/HTTPS) o archivo local.
-    El CSV debe contener al menos la columna 'isin'.
-    Columnas opcionales: fturl, fundsquareurl, investingurl, arivaurl,
-    yahoourl, cobasurl, genericurl, genericselector, genericselectorfecha.
+    Soporta nombres de columna con o sin guiones bajos, en cualquier capitalización.
     Retorna una lista de FundConfig sin duplicados por ISIN.
     """
     path_str = str(path_or_url).strip()
@@ -103,7 +104,7 @@ def load_funds_csv(path_or_url: str | Path) -> List[FundConfig]:
         )
         return []
 
-    # 3. Parsear CSV usando csv.DictReader
+    # 3. Parsear CSV — cada campo acepta nombre con o sin guión bajo
     funds: List[FundConfig] = []
     for rownum, row in enumerate(reader, start=2):
         if not any(row.values()):
@@ -115,19 +116,19 @@ def load_funds_csv(path_or_url: str | Path) -> List[FundConfig]:
         funds.append(
             FundConfig(
                 isin=isin,
-                fturl=_get_column_value(row, "fturl"),
-                fundsquareurl=_get_column_value(row, "fundsquareurl"),
-                investingurl=_get_column_value(row, "investingurl"),
-                arivaurl=_get_column_value(row, "arivaurl"),
-                yahoourl=_get_column_value(row, "yahoourl"),
-                cobasurl=_get_column_value(row, "cobasurl"),
-                genericurl=_get_column_value(row, "genericurl"),
-                genericselector=_get_column_value(row, "genericselector"),
-                genericselectorfecha=_get_column_value(row, "genericselectorfecha"),  # ← NUEVO
+                fturl=_get_column_value(row, "ft_url", "fturl"),
+                fundsquareurl=_get_column_value(row, "fundsquare_url", "fundsquareurl"),
+                investingurl=_get_column_value(row, "investing_url", "investingurl"),
+                arivaurl=_get_column_value(row, "ariva_url", "arivaurl"),
+                yahoourl=_get_column_value(row, "yahoo_url", "yahoourl"),
+                cobasurl=_get_column_value(row, "cobas_url", "cobasurl"),
+                genericurl=_get_column_value(row, "generic_url", "genericurl"),
+                genericselector=_get_column_value(row, "generic_selector", "genericselector"),
+                genericselectorfecha=_get_column_value(row, "genericselectorfecha", "generic_selector_fecha"),
             )
         )
 
-    # 4. Deduplicar por ISIN (la última ocurrencia sobrescribe a las anteriores)
+    # 4. Deduplicar por ISIN (la última ocurrencia sobrescribe anteriores)
     dedup_map = {}
     for fund in funds:
         dedup_map[fund.isin] = fund
