@@ -5,6 +5,10 @@
 5. Los módulos dentro de `src/scrapers/` encapsulan la lógica específica de extracción para cada plataforma: `ft_scraper.py`, `fundsquare_scraper.py`, `ariva_scraper.py`, `yahoo_finance_scraper.py`, **`cobas_scraper.py`** y **`generic_scraper.py`**.
 6. **`generic_scraper.py`** es un scraper polivalente que puede extraer el precio de CUALQUIER web usando un selector CSS proporcionado en el CSV. Funciona como la "Tabla Web" de Portfolio Performance pero automático. Usa tres estrategias en cascada: requests estático → curl_cffi (TLS fingerprint) → Playwright headless (opcional). Gestiona automáticamente cookies, rate limiting, reintentos y formatos de precio europeo/anglosajón.
 7. Scrapers como `ft_scraper.py` analizan el HTML financiero apoyándose en `beautifulsoup4` y `lxml`.
+   **Fundsquare Scraper** ha sido mejorado para ser más tolerante a cambios en la estructura HTML:
+   - Busca la tabla `table.tabHorizontal` y extrae las columnas de fecha y NAV (asumiendo que la fecha es la primera columna y el NAV la cuarta, o detectándolos por el texto del encabezado).
+   - Si no encuentra la tabla principal, busca en la sección "Latest Price".
+   - Utiliza la nueva función `parse_date()` en `utils.py` que soporta múltiples formatos (DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY, DDMMYYYY).
 8. Otros como `yahoo_finance_scraper.py` atacan directamente APIs JSON internas para mayor eficiencia.
 9. `src/utils.py` provee herramientas transversales para el formateo de fechas, logs y serialización JSON.
 10. Una vez descargados los datos, `app.py` los unifica utilizando la función central `merge_updates()`.
