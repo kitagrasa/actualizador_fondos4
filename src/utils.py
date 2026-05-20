@@ -47,12 +47,36 @@ def parse_float(text: str) -> float:
         
     return float(s)
 
+def parse_date(date_str: str) -> str:
+    """
+    Parsea una fecha en formato DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY, o DDMMYYYY.
+    Devuelve YYYY-MM-DD.
+    """
+    # Eliminar separadores no numéricos
+    cleaned = re.sub(r"[^\d]", "", date_str)
+    if len(cleaned) == 8:
+        # Formato DDMMYYYY
+        day = cleaned[0:2]
+        month = cleaned[2:4]
+        year = cleaned[4:8]
+        return f"{year}-{month}-{day}"
+    else:
+        # Intentar con separadores
+        separators = re.findall(r"(\D)", date_str)
+        if separators:
+            sep = separators[0]
+            parts = date_str.split(sep)
+            if len(parts) == 3:
+                day, month, year = parts
+                if len(year) == 2:
+                    year = f"20{year}"
+                return f"{year}-{month.zfill(2)}-{day.zfill(2)}"
+        raise ValueError(f"Formato de fecha no reconocido: {date_str}")
+
+# Esta función se mantiene por compatibilidad con otros módulos
 def parse_fundsquare_date_ddmmyyyy(text: str) -> str:
-    digits = re.sub(r"\D", "", text)
-    if len(digits) != 8:
-        raise ValueError(f"Fecha Fundsquare inválida: {text!r}")
-    dt = datetime.strptime(digits, "%d%m%Y").date()
-    return dt.isoformat()
+    """Wrapper de parse_date para mantener compatibilidad con otros módulos."""
+    return parse_date(text)
 
 def parse_ft_date(datecell_text: str) -> str:
     m = RE_FT_LONG_DATE.search(datecell_text)
