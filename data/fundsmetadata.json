@@ -51,9 +51,9 @@
     },
     "IE0006TUI4G7": {
       "arivaurl": "https://www.ariva.de/fonds/polar-capital-funds-plc-smart-energy-fund-r-eur-acc/kurse/historische-kurse?boerse_id=170",
-      "genericselector": "#prices-part-11937-wrapper > div.table-scroll-container > table > tbody > tr.shareclass-row.primary._last2 > td.index_3.c5",
-      "genericselectorfecha": "#prices-part-11937-wrapper > div.table-scroll-container > table > tbody > tr.shareclass-row.primary._last2 > td.index_5.c7",
-      "genericurl": "https://www.polarcapitalfunds.com/es/private/Literature-and-Prices/Fund-Prices/"
+      "genericselector": "body > div.pcontent > div > div.grid.gcenter > main > div.card.pt-10.pt-m-0 > div.card-content.p-10 > div.grid.align-center > div.c-12.cm-auto.border-right > table > tbody > tr:nth-child(2) > td.txt-s7.is__realtime-last > span",
+      "genericselectorfecha": "body > div.pcontent > div > div.grid.gcenter > main > div.card.pt-10.pt-m-0 > div.card-content.p-10 > div.grid.align-center > div.c-12.cm-auto.border-right > table > tbody > tr:nth-child(1) > td.is__realtime-quality.js-next-event-quotes > span:nth-child(2)",
+      "genericurl": "https://es.marketscreener.com/cotizacion/fondos/POLAR-CAPITAL-SMART-ENERG-197153219/graficos-comparacion/"
     },
     "IE00BG88WH84": {
       "currency": "GBp",
