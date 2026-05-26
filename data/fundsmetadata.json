@@ -85,6 +85,17 @@
       "investing_pair_id": "1036800",
       "investing_url": "https://es.investing.com/funds/world-gold-fund-e2e-historical-data"
     },
+    "LU0194438841": {
+      "arivaurl": "https://www.ariva.de/fonds/bnp-paribas-funds-japan-small-cap-classic-h-eur-cap/kurse/historische-kurse?boerse_id=170",
+      "currency": "EUR",
+      "fturl": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU0194438841:EUR",
+      "fundsquareurl": "https://www.fundsquare.net/security/price?idInstr=150",
+      "genericselector": "body > div.pcontent > div > div.grid.gcenter > main > div.card.pt-10.pt-m-0 > div > div.grid.align-center > div.c-12.cm-auto.border-right > table > tbody > tr:nth-child(2) > td.txt-s7.is__realtime-last > span",
+      "genericselectorfecha": "body > div.pcontent > div > div.grid.gcenter > main > div.card.pt-10.pt-m-0 > div > div.grid.align-center > div.c-12.cm-auto.border-right > table > tbody > tr:nth-child(1) > td.is__realtime-quality.js-next-event-quotes > span:nth-child(2)",
+      "genericurl": "https://es.marketscreener.com/cotizacion/fondos/BNP-PARIBAS-JAPAN-SM-CP-C-7121189/",
+      "name": "BNP Paribas Funds Japan Small Cap Classic H EUR Capitalisation",
+      "yahoourl": "https://es.finance.yahoo.com/quote/0P00000Z86.F/history/"
+    },
     "LU0223332320": {
       "currency": "EUR",
       "ft_url": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU0223332320:EUR",
