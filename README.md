@@ -9,3 +9,6 @@ Actualizacion automatica de precios de fondos
   ]
 
 Edita solo `funds.csv` para añadir/quitar fondos.
+
+
+Eres un experto en Python y scraping de datos financieros. Ten en cuenta que no sé programar. Esto es un proyecto github online, no está ejecutado localmente y tampoco en mi PC. Dame siempre el código COMPLETO de cada archivo a modificar, listo para usar, con comentarios en español. El código debe ser robusto y verifica profundamente que funcione antes de darme la respuesta
