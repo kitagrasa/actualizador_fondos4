@@ -93,7 +93,7 @@
       "gen_fecha1": "body > div.pcontent > div > div.grid.gcenter > main > div.card.pt-10.pt-m-0 > div > div.grid.align-center > div.c-12.cm-auto.border-right > table > tbody > tr:nth-child(1) > td.is__realtime-quality.js-next-event-quotes > span:nth-child(2)",
       "gen_fecha2": "#fundsheet > div > div.public-websites-fundsheet > div > div > div.sc-jDbdID.eQBRae.bnp-fundsheet-v2-header > div > div.sc-kbKRms.fxajtg > div > div.sc-kNzByj.dIIZjY > div:nth-child(1) > div.sc-qPubm.IwGWJ.card-date > span:nth-child(2)",
       "gen_selector1": "body > div.pcontent > div > div.grid.gcenter > main > div.card.pt-10.pt-m-0 > div > div.grid.align-center > div.c-12.cm-auto.border-right > table > tbody > tr:nth-child(2) > td.txt-s7.is__realtime-last > span",
-      "gen_selector2": "#fundsheet > div > div.public-websites-fundsheet > div > div > div.sc-jDbdID.eQBRae.bnp-fundsheet-v2-header > div > div.sc-kbKRms.fxajtg > div > div.sc-kNzByj.dIIZjY > div:nth-child(1) > div.sc-ptGLl.hoTuqB.card-info > div",
+      "gen_selector2": "div[style*=\"48px\"]",
       "gen_url1": "https://es.marketscreener.com/cotizacion/fondos/BNP-PARIBAS-JAPAN-SM-CP-C-7121189/",
       "gen_url2": "https://www.bnpparibas-am.com/en-lu/fundsheet/equity/bnp-paribas-funds-japan-small-cap-classic-h-eur-c-lu0194438841/?tab=overview",
       "name": "BNP Paribas Funds Japan Small Cap Classic H EUR Capitalisation",
