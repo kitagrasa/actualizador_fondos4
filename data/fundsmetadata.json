@@ -8,18 +8,18 @@
     "ES0112609005": {
       "currency": "EUR",
       "fturl": "https://markets.ft.com/data/funds/tearsheet/historical?s=ES0112609005:EUR",
-      "genericselector": "#azv-rentabilidad-esp > div.elementor-element.elementor-element-535971b.e-con-full.e-flex.e-con.e-child > div.elementor-element.elementor-element-68b4a9a.e-con-full.e-flex.e-con.e-child > div.elementor-element.elementor-element-3f1ec24.elementor-widget__width-initial.elementor-widget.elementor-widget-icon-box > div > div > div > div > span",
-      "genericselectorfecha": "#azv-rentabilidad-esp > div.elementor-element.elementor-element-535971b.e-con-full.e-flex.e-con.e-child > div.elementor-element.elementor-element-6dd099a.e-con-full.e-flex.e-con.e-child > div.elementor-element.elementor-element-b1d58c6.elementor-widget__width-initial.elementor-widget.elementor-widget-icon-box > div > div > div > p",
-      "genericurl": "https://www.azvalor.com/fondos-de-inversion/blue-chips-fi/",
+      "gen_fecha1": "#azv-rentabilidad-esp > div.elementor-element.elementor-element-535971b.e-con-full.e-flex.e-con.e-child > div.elementor-element.elementor-element-6dd099a.e-con-full.e-flex.e-con.e-child > div.elementor-element.elementor-element-b1d58c6.elementor-widget__width-initial.elementor-widget.elementor-widget-icon-box > div > div > div > p",
+      "gen_selector1": "#azv-rentabilidad-esp > div.elementor-element.elementor-element-535971b.e-con-full.e-flex.e-con.e-child > div.elementor-element.elementor-element-68b4a9a.e-con-full.e-flex.e-con.e-child > div.elementor-element.elementor-element-3f1ec24.elementor-widget__width-initial.elementor-widget.elementor-widget-icon-box > div > div > div > div > span",
+      "gen_url1": "https://www.azvalor.com/fondos-de-inversion/blue-chips-fi/",
       "name": "Azvalor Blue Chips FI",
       "yahoourl": "https://es.finance.yahoo.com/quote/0P00019O2I.F/history/"
     },
     "ES0112611001": {
       "currency": "EUR",
       "fturl": "https://markets.ft.com/data/funds/tearsheet/historical?s=ES0112611001:EUR",
-      "genericselector": "#azv-rentabilidad-esp > div.elementor-element.elementor-element-535971b.e-con-full.e-flex.e-con.e-child > div.elementor-element.elementor-element-68b4a9a.e-con-full.e-flex.e-con.e-child > div.elementor-element.elementor-element-3f1ec24.elementor-widget__width-initial.elementor-widget.elementor-widget-icon-box > div > div > div > div > span",
-      "genericselectorfecha": "#azv-rentabilidad-esp > div.elementor-element.elementor-element-535971b.e-con-full.e-flex.e-con.e-child > div.elementor-element.elementor-element-6dd099a.e-con-full.e-flex.e-con.e-child > div.elementor-element.elementor-element-b1d58c6.elementor-widget__width-initial.elementor-widget.elementor-widget-icon-box > div > div > div > p",
-      "genericurl": "https://www.azvalor.com/fondos-de-inversion/azvalor-internacional/",
+      "gen_fecha1": "#azv-rentabilidad-esp > div.elementor-element.elementor-element-535971b.e-con-full.e-flex.e-con.e-child > div.elementor-element.elementor-element-6dd099a.e-con-full.e-flex.e-con.e-child > div.elementor-element.elementor-element-b1d58c6.elementor-widget__width-initial.elementor-widget.elementor-widget-icon-box > div > div > div > p",
+      "gen_selector1": "#azv-rentabilidad-esp > div.elementor-element.elementor-element-535971b.e-con-full.e-flex.e-con.e-child > div.elementor-element.elementor-element-68b4a9a.e-con-full.e-flex.e-con.e-child > div.elementor-element.elementor-element-3f1ec24.elementor-widget__width-initial.elementor-widget.elementor-widget-icon-box > div > div > div > div > span",
+      "gen_url1": "https://www.azvalor.com/fondos-de-inversion/azvalor-internacional/",
       "name": "Azvalor Internacional FI",
       "yahoourl": "https://es.finance.yahoo.com/quote/0P00016YQ5.F/history/"
     },
@@ -51,9 +51,9 @@
     },
     "IE0006TUI4G7": {
       "arivaurl": "https://www.ariva.de/fonds/polar-capital-funds-plc-smart-energy-fund-r-eur-acc/kurse/historische-kurse?boerse_id=170",
-      "genericselector": "body > div.pcontent > div > div.grid.gcenter > main > div.card.pt-10.pt-m-0 > div.card-content.p-10 > div.grid.align-center > div.c-12.cm-auto.border-right > table > tbody > tr:nth-child(2) > td.txt-s7.is__realtime-last > span",
-      "genericselectorfecha": "body > div.pcontent > div > div.grid.gcenter > main > div.card.pt-10.pt-m-0 > div.card-content.p-10 > div.grid.align-center > div.c-12.cm-auto.border-right > table > tbody > tr:nth-child(1) > td.is__realtime-quality.js-next-event-quotes > span:nth-child(2)",
-      "genericurl": "https://es.marketscreener.com/cotizacion/fondos/POLAR-CAPITAL-SMART-ENERG-197153219/graficos-comparacion/"
+      "gen_fecha1": "body > div.pcontent > div > div.grid.gcenter > main > div.card.pt-10.pt-m-0 > div.card-content.p-10 > div.grid.align-center > div.c-12.cm-auto.border-right > table > tbody > tr:nth-child(1) > td.is__realtime-quality.js-next-event-quotes > span:nth-child(2)",
+      "gen_selector1": "body > div.pcontent > div > div.grid.gcenter > main > div.card.pt-10.pt-m-0 > div.card-content.p-10 > div.grid.align-center > div.c-12.cm-auto.border-right > table > tbody > tr:nth-child(2) > td.txt-s7.is__realtime-last > span",
+      "gen_url1": "https://es.marketscreener.com/cotizacion/fondos/POLAR-CAPITAL-SMART-ENERG-197153219/graficos-comparacion/"
     },
     "IE00BG88WH84": {
       "currency": "GBp",
@@ -90,9 +90,12 @@
       "currency": "EUR",
       "fturl": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU0194438841:EUR",
       "fundsquareurl": "https://www.fundsquare.net/security/price?idInstr=150",
-      "genericselector": "body > div.pcontent > div > div.grid.gcenter > main > div.card.pt-10.pt-m-0 > div > div.grid.align-center > div.c-12.cm-auto.border-right > table > tbody > tr:nth-child(2) > td.txt-s7.is__realtime-last > span",
-      "genericselectorfecha": "body > div.pcontent > div > div.grid.gcenter > main > div.card.pt-10.pt-m-0 > div > div.grid.align-center > div.c-12.cm-auto.border-right > table > tbody > tr:nth-child(1) > td.is__realtime-quality.js-next-event-quotes > span:nth-child(2)",
-      "genericurl": "https://es.marketscreener.com/cotizacion/fondos/BNP-PARIBAS-JAPAN-SM-CP-C-7121189/",
+      "gen_fecha1": "body > div.pcontent > div > div.grid.gcenter > main > div.card.pt-10.pt-m-0 > div > div.grid.align-center > div.c-12.cm-auto.border-right > table > tbody > tr:nth-child(1) > td.is__realtime-quality.js-next-event-quotes > span:nth-child(2)",
+      "gen_fecha2": "#fundsheet > div > div.public-websites-fundsheet > div > div > div.sc-jDbdID.eQBRae.bnp-fundsheet-v2-header > div > div.sc-kbKRms.fxajtg > div > div.sc-kNzByj.dIIZjY > div:nth-child(1) > div.sc-qPubm.IwGWJ.card-date > span:nth-child(2)",
+      "gen_selector1": "body > div.pcontent > div > div.grid.gcenter > main > div.card.pt-10.pt-m-0 > div > div.grid.align-center > div.c-12.cm-auto.border-right > table > tbody > tr:nth-child(2) > td.txt-s7.is__realtime-last > span",
+      "gen_selector2": "#fundsheet > div > div.public-websites-fundsheet > div > div > div.sc-jDbdID.eQBRae.bnp-fundsheet-v2-header > div > div.sc-kbKRms.fxajtg > div > div.sc-kNzByj.dIIZjY > div:nth-child(1) > div.sc-ptGLl.hoTuqB.card-info > div",
+      "gen_url1": "https://es.marketscreener.com/cotizacion/fondos/BNP-PARIBAS-JAPAN-SM-CP-C-7121189/",
+      "gen_url2": "https://www.bnpparibas-am.com/en-lu/fundsheet/equity/bnp-paribas-funds-japan-small-cap-classic-h-eur-c-lu0194438841/?tab=overview",
       "name": "BNP Paribas Funds Japan Small Cap Classic H EUR Capitalisation",
       "yahoourl": "https://es.finance.yahoo.com/quote/0P00000Z86.F/history/"
     },
