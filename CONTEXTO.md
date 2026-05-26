@@ -4,12 +4,8 @@
 4. `src/http_client.py` establece una sesión de `requests` con reintentos y cabeceras para evitar bloqueos.
 5. Los módulos dentro de `src/scrapers/` encapsulan la lógica específica de extracción para cada plataforma: `ft_scraper.py`, `fundsquare_scraper.py`, `ariva_scraper.py`, `yahoo_finance_scraper.py`, **`cobas_scraper.py`** y **`generic_scraper.py`**.
 6. **`generic_scraper.py`** es un scraper polivalente que puede extraer el precio de CUALQUIER web usando un selector CSS proporcionado en el CSV. Funciona como la "Tabla Web" de Portfolio Performance pero automático. Usa tres estrategias en cascada: requests estático → curl_cffi (TLS fingerprint) → Playwright headless (opcional). Gestiona automáticamente cookies, rate limiting, reintentos y formatos de precio europeo/anglosajón.
-   - **MEJORAS INCORPORADAS (2026-05-25):**
-     - **Diagnóstico automático** cuando el selector CSS falla: detecta páginas con poco texto visible (JavaScript), busca selectores alternativos genéricos y logra sugerencias para actualizar el CSV.
-     - **Extracción de JSON embebido**: analiza bloques `<script>` (JSON-LD, variables JS, data-props) para extraer precio y fecha sin necesidad de selectores CSS.
-     - **Manejo robusto de HTTP 403**: rota automáticamente entre varios User-Agents, añade Referer realista y delays aleatorios antes de pasar a curl_cffi.
-     - **Módulo especializado para MarketScreener**: detecta el dominio, extrae el ID numérico de la URL y, si la página es de gráficos (`/graficos-comparacion/`), redirige a la página principal donde el precio está disponible en HTML estático o JSON embebido.
-     - **Logging mejorado**: en caso de fallo, informa el código HTTP, longitud del HTML, si la página parece requerir JS, y sugiere selectores alternativos encontrados.
+   - **MEJORAS INCORPORADAS (2026-05-25):** ...
+   - **Soporte para dos fuentes genéricas por ISIN:** Las columnas `gen_url1`, `gen_selec_imp1`, `gen_selec_fecha1` definen la primera fuente (prioridad baja). Las columnas `gen_url2`, `gen_selec_imp2`, `gen_selec_fecha2` definen una segunda fuente (prioridad intermedia, sobreescribe a la primera). Las antiguas columnas `generic_url`, `generic_selector`, `genericselectorfecha` siguen siendo aceptadas para compatibilidad (se asignan a la fuente 1).
 7. Scrapers como `ft_scraper.py` analizan el HTML financiero apoyándose en `beautifulsoup4` y `lxml`.
    **Fundsquare Scraper** ha sido mejorado para ser más tolerante a cambios en la estructura HTML:
    - Busca la tabla `table.tabHorizontal` y extrae las columnas de fecha y NAV (asumiendo que la fecha es la primera columna y el NAV la cuarta, o detectándolos por el texto del encabezado).
@@ -30,5 +26,8 @@
 20. Las dependencias externas clave son `requests` (red), `beautifulsoup4` (parsing), `lxml` (motor de velocidad) y `curl_cffi` (TLS fingerprint anti-bot). `playwright` es opcional y no está disponible en GitHub Actions.
 21. Todo el código aprovecha librerías estándar de Python (`dataclasses`, `pathlib`, `json`) minimizando carga.
 22. El output resultante produce datos estructurados y limpios listos para utilizarse en Portfolio Performance.
-23. Para añadir un fondo con el scraper genérico, basta con añadir en el CSV las columnas `generic_url` (URL de la web), `generic_selector` (selector CSS del precio), `genericselectorfecha` (selector CSS de fecha). No es necesario escribir código nuevo. Para añadir "selector" hay que seleccionar el precio/fecha, inspeccionar, copy y "copy selector".
+23. Para añadir un fondo con el scraper genérico, basta con añadir en el CSV las columnas:
+    - `gen_url1` (URL de la web), `gen_selec_imp1` (selector CSS del precio), `gen_selec_fecha1` (selector CSS de fecha).
+    - Opcionalmente `gen_url2`, `gen_selec_imp2`, `gen_selec_fecha2` para una segunda fuente alternativa.
+    No es necesario escribir código nuevo. Para obtener el selector: inspecciona el elemento precio/fecha, copia el selector CSS.
 24. **Nota sobre MarketScreener:** Si se proporciona una URL de la página de gráficos (contiene `/graficos-comparacion/`), el scraper genérico redirigirá automáticamente a la página principal del fondo y extraerá el precio desde allí, sin necesidad de cambiar el selector en el CSV.
