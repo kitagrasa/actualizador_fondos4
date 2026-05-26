@@ -2,7 +2,7 @@
 Orquestador principal: descarga precios de múltiples fuentes y fusiona
 según prioridad.
 Jerarquía (de menor a mayor prioridad):
-  Generic → Ariva → Fundsquare → FT → Yahoo → Cobas
+  Generic1 → Generic2 → Ariva → Fundsquare → FT → Yahoo → Cobas
 """
 from __future__ import annotations
 
@@ -87,7 +87,7 @@ def merge_updates(existing: Dict[str, float], *sources) -> Dict[str, float]:
     """
     Fusiona el histórico existente con los datos de nuevas fuentes.
     El último en la lista tiene máxima prioridad.
-    Jerarquía: Generic (menor) → Ariva → Fundsquare → FT → Yahoo → Cobas (mayor).
+    Jerarquía: Generic1 → Generic2 → Ariva → Fundsquare → FT → Yahoo → Cobas
     """
     result = dict(existing)
     for source in sources:
@@ -146,19 +146,25 @@ def main() -> int:
         ariva_url = fund.arivaurl or None
         yahoo_url = fund.yahoourl or None
         cobas_url = fund.cobasurl or None
-        generic_url = fund.genericurl or None
-        generic_selector = fund.genericselector or None
-        generic_selector_fecha = fund.genericselectorfecha or None
+
+        # Datos de las dos fuentes genéricas
+        gen1_url = fund.gen_url1 or None
+        gen1_selector = fund.gen_selector1 or None
+        gen1_fecha = fund.gen_fecha1 or None
+        gen2_url = fund.gen_url2 or None
+        gen2_selector = fund.gen_selector2 or None
+        gen2_fecha = fund.gen_fecha2 or None
 
         log.info(
-            "Procesando %s | FT=%s | FS=%s | ARIVA=%s | COBAS=%s | YAHOO=%s | GENERIC=%s",
+            "Procesando %s | FT=%s | FS=%s | ARIVA=%s | COBAS=%s | YAHOO=%s | GEN1=%s | GEN2=%s",
             isin,
             fund.fturl or "—",
             fund.fundsquareurl or "—",
             ariva_url or "—",
             cobas_url or "—",
             yahoo_url or "—",
-            generic_url or "—",
+            gen1_url or "—",
+            gen2_url or "—",
         )
 
         existing_path = PRICES_DIR / f"{isin}.json"
@@ -172,16 +178,27 @@ def main() -> int:
             else None
         )
 
-        # 0. Scraper genérico (mínima prioridad)
-        generic_prices = []
-        if generic_url and generic_selector:
+        # 0. Scraper genérico 1 (mínima prioridad)
+        generic_prices1 = []
+        if gen1_url and gen1_selector:
             result = scrape_generic_prices(
                 session=session,
-                url=generic_url,
-                selector=generic_selector,
-                selector_fecha=generic_selector_fecha,
+                url=gen1_url,
+                selector=gen1_selector,
+                selector_fecha=gen1_fecha,
             )
-            generic_prices = result if result else []
+            generic_prices1 = result if result else []
+
+        # 0b. Scraper genérico 2 (prioridad intermedia entre generic1 y ariva)
+        generic_prices2 = []
+        if gen2_url and gen2_selector:
+            result = scrape_generic_prices(
+                session=session,
+                url=gen2_url,
+                selector=gen2_selector,
+                selector_fecha=gen2_fecha,
+            )
+            generic_prices2 = result if result else []
 
         # 1. Yahoo Finance — siempre 10 años como red de seguridad
         yf_prices, yf_meta = [], {}
@@ -191,7 +208,7 @@ def main() -> int:
                 yahoo_url,
                 startdate=None,
                 enddate=today,
-                full_refresh=True,   # ← CORREGIDO: antes era fullrefresh=True
+                full_refresh=True,
             )
 
         # 2. Financial Times — incremental o completo
@@ -227,10 +244,11 @@ def main() -> int:
         # 5. Cobas AM (máxima prioridad)
         cobas_prices = scrape_cobas_prices(session, cobas_url)
 
-        # Fusión: Generic → Ariva → Fundsquare → FT → Yahoo → Cobas
+        # Fusión: Generic1 → Generic2 → Ariva → Fundsquare → FT → Yahoo → Cobas
         merged = merge_updates(
             existing,
-            generic_prices,
+            generic_prices1,
+            generic_prices2,
             ariva_tuples,
             fs_prices,
             ft_prices,
@@ -244,17 +262,25 @@ def main() -> int:
         else:
             log.info("Sin cambios en %s", isin)
 
-        # Actualizar metadatos
+        # Actualizar metadatos (usar las nuevas claves)
         f_meta = meta.setdefault("funds", {}).setdefault(isin, {})
+        # Limpiar claves antiguas si existen (migración)
+        for oldkey in ["genericurl", "genericselector", "genericselectorfecha"]:
+            if oldkey in f_meta:
+                del f_meta[oldkey]
+
         for key, val in [
             ("fturl", fund.fturl),
             ("fundsquareurl", fund.fundsquareurl),
             ("arivaurl", ariva_url),
             ("cobasurl", cobas_url),
             ("yahoourl", yahoo_url),
-            ("genericurl", generic_url),
-            ("genericselector", generic_selector),
-            ("genericselectorfecha", generic_selector_fecha),
+            ("gen_url1", gen1_url),
+            ("gen_selector1", gen1_selector),
+            ("gen_fecha1", gen1_fecha),
+            ("gen_url2", gen2_url),
+            ("gen_selector2", gen2_selector),
+            ("gen_fecha2", gen2_fecha),
         ]:
             if val and f_meta.get(key) != val:
                 f_meta[key] = val
