@@ -85,20 +85,6 @@
       "investing_pair_id": "1036800",
       "investing_url": "https://es.investing.com/funds/world-gold-fund-e2e-historical-data"
     },
-    "LU0194438841": {
-      "arivaurl": "https://www.ariva.de/fonds/bnp-paribas-funds-japan-small-cap-classic-h-eur-cap/kurse/historische-kurse?boerse_id=170",
-      "currency": "EUR",
-      "fturl": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU0194438841:EUR",
-      "fundsquareurl": "https://www.fundsquare.net/security/price?idInstr=150",
-      "gen_fecha1": "body > div.pcontent > div > div.grid.gcenter > main > div.card.pt-10.pt-m-0 > div > div.grid.align-center > div.c-12.cm-auto.border-right > table > tbody > tr:nth-child(1) > td.is__realtime-quality.js-next-event-quotes > span:nth-child(2)",
-      "gen_fecha2": "<div class=\"sc-pcPiD jeCTA\"><div class=\"sc-pljtI gEcyeJ\"><div class=\"sc-pImJo kdZfkZ card-label\"><span>Net Asset Value</span></div></div><div class=\"sc-ptGLl hoTuqB card-info\"><div style=\"font-size: 48px;\">489.05 EUR</div></div><div class=\"sc-qPubm IwGWJ card-date\">(<span>As of</span> <span>5/22/2026</span>)</div></div>",
-      "gen_selector1": "body > div.pcontent > div > div.grid.gcenter > main > div.card.pt-10.pt-m-0 > div > div.grid.align-center > div.c-12.cm-auto.border-right > table > tbody > tr:nth-child(2) > td.txt-s7.is__realtime-last > span",
-      "gen_selector2": "<div class=\"sc-pcPiD jeCTA\"><div class=\"sc-pljtI gEcyeJ\"><div class=\"sc-pImJo kdZfkZ card-label\"><span>Net Asset Value</span></div></div><div class=\"sc-ptGLl hoTuqB card-info\"><div style=\"font-size: 48px;\">489.05 EUR</div></div><div class=\"sc-qPubm IwGWJ card-date\">(<span>As of</span> <span>5/22/2026</span>)</div></div>",
-      "gen_url1": "https://es.marketscreener.com/cotizacion/fondos/BNP-PARIBAS-JAPAN-SM-CP-C-7121189/",
-      "gen_url2": "https://www.bnpparibas-am.com/en-lu/fundsheet/equity/bnp-paribas-funds-japan-small-cap-classic-h-eur-c-lu0194438841/?tab=overview",
-      "name": "BNP Paribas Funds Japan Small Cap Classic H EUR Capitalisation",
-      "yahoourl": "https://es.finance.yahoo.com/quote/0P00000Z86.F/history/"
-    },
     "LU0223332320": {
       "currency": "EUR",
       "ft_url": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU0223332320:EUR",
