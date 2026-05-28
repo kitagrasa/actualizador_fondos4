@@ -1,10 +1,5 @@
 {
   "funds": {
-    "CA26139R1091": {
-      "arivaurl": "https://www.ariva.de/aktien/dpm-metals-inc-aktie/kurse/historische-kurse?boerse_id=83",
-      "currency": "USD",
-      "yahoourl": "https://es.finance.yahoo.com/quote/DPMLF/history/"
-    },
     "ES0112609005": {
       "currency": "EUR",
       "fturl": "https://markets.ft.com/data/funds/tearsheet/historical?s=ES0112609005:EUR",
@@ -55,17 +50,6 @@
       "gen_selector1": "body > div.pcontent > div > div.grid.gcenter > main > div.card.pt-10.pt-m-0 > div.card-content.p-10 > div.grid.align-center > div.c-12.cm-auto.border-right > table > tbody > tr:nth-child(2) > td.txt-s7.is__realtime-last > span",
       "gen_url1": "https://es.marketscreener.com/cotizacion/fondos/POLAR-CAPITAL-SMART-ENERG-197153219/graficos-comparacion/"
     },
-    "IE00BG88WH84": {
-      "currency": "GBp",
-      "yahoourl": "https://finance.yahoo.com/quote/WCOM.L/history/"
-    },
-    "IE00BH6XSF26": {
-      "arivaurl": "https://www.ariva.de/fonds/kopernik-global-all-cap-equity-fund-a-eur/kurse/historische-kurse",
-      "currency": "EUR",
-      "fturl": "https://markets.ft.com/data/funds/tearsheet/historical?s=IE00BH6XSF26:EUR",
-      "name": "Heptagon Fund ICAV - Kopernik Global All-Cap Equity Fund AE EUR Acc",
-      "yahoourl": "https://es.finance.yahoo.com/quote/0P0001AJ8L.F/history/"
-    },
     "IE00BJM0B969": {
       "currency": "EUR",
       "fturl": "https://markets.ft.com/data/funds/tearsheet/historical?s=IE00BJM0B969:EUR",
@@ -85,27 +69,11 @@
       "investing_pair_id": "1036800",
       "investing_url": "https://es.investing.com/funds/world-gold-fund-e2e-historical-data"
     },
-    "LU0223332320": {
-      "currency": "EUR",
-      "ft_url": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU0223332320:EUR",
-      "fturl": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU0223332320:EUR",
-      "fundsquare_url": "https://www.fundsquare.net/security/histo-prices?idInstr=28356",
-      "fundsquareurl": "https://www.fundsquare.net/security/histo-prices?idInstr=28356",
-      "name": "Multipartner SICAV - Konwave Gold Equity Fund B EUR"
-    },
     "LU0329355670": {
       "arivaurl": "https://www.ariva.de/fonds/robeco-qi-emerging-markets-active-equities-eur-d/kurse/historische-kurse?boerse_id=170",
       "currency": "EUR",
       "fturl": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU0329355670:EUR",
       "name": "Robeco QI Emerging Markets Active Equities D €"
-    },
-    "LU0563745743": {
-      "currency": "EUR",
-      "ft_url": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU0563745743:EUR",
-      "fturl": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU0563745743:EUR",
-      "fundsquare_url": "https://www.fundsquare.net/security/histo-prices?idInstr=87217",
-      "fundsquareurl": "https://www.fundsquare.net/security/histo-prices?idInstr=87217",
-      "name": "Bestinver Tordesillas SICAV Iberia A"
     },
     "LU1223083087": {
       "currency": "EUR",
@@ -146,26 +114,6 @@
       "investing_pair_id": "1177606",
       "investing_url": "https://es.investing.com/funds/lu1598720172-historical-data",
       "name": "Cobas LUX SICAV - Cobas Large Cap Fund-P Acc EUR"
-    },
-    "LU1822851884": {
-      "currency": "EUR",
-      "ft_url": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU1822851884:EUR",
-      "fturl": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU1822851884:EUR",
-      "fundsquare_url": "https://www.fundsquare.net/security/histo-prices?idInstr=328171",
-      "fundsquareurl": "https://www.fundsquare.net/security/histo-prices?idInstr=328171",
-      "investing_pair_id": "1239517",
-      "investing_url": "https://es.investing.com/funds/lu1822851884-historical-data",
-      "name": "LUX MULTIMANAGER SICAV - Finserve Global Security Fund I EUR R"
-    },
-    "LU1832174962": {
-      "currency": "EUR",
-      "ft_url": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU1832174962:EUR",
-      "fturl": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU1832174962:EUR",
-      "fundsquare_url": "https://www.fundsquare.net/security/histo-prices?idInstr=310815",
-      "fundsquareurl": "https://www.fundsquare.net/security/histo-prices?idInstr=310815",
-      "investing_pair_id": "1181284",
-      "investing_url": "https://es.investing.com/funds/lu1832174962-historical-data",
-      "name": "Indépendance AM Europe Small A (C)"
     },
     "LU2145461757": {
       "arivaurl": "https://www.ariva.de/fonds/robeco-smart-energy-d-eur/kurse/historische-kurse?boerse_id=170",
