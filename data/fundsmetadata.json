@@ -69,7 +69,13 @@
       "investing_pair_id": "1036800",
       "investing_url": "https://es.investing.com/funds/world-gold-fund-e2e-historical-data"
     },
-    "LU0194438841": {},
+    "LU0194438841": {
+      "arivaurl": "https://www.ariva.de/fonds/bnp-paribas-funds-japan-small-cap-classic-h-eur-cap/kurse/historische-kurse",
+      "currency": "EUR",
+      "fturl": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU0194438841:EUR",
+      "name": "BNP Paribas Funds Japan Small Cap Classic H EUR Capitalisation",
+      "yahoourl": "https://es.finance.yahoo.com/quote/0P00000Z86.F/history/"
+    },
     "LU0329355670": {
       "arivaurl": "https://www.ariva.de/fonds/robeco-qi-emerging-markets-active-equities-eur-d/kurse/historische-kurse?boerse_id=170",
       "currency": "EUR",
