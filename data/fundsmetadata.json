@@ -78,6 +78,8 @@
     },
     "LU0625737910": {
       "currency": "EUR",
+      "fturl": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU0625737910:EUR",
+      "name": "Pictet-China Index P EUR",
       "yahoourl": "https://es.finance.yahoo.com/quote/LU0625737910.LU/history/"
     },
     "LU1223083087": {
