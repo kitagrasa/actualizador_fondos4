@@ -1,13 +1,17 @@
 """Tests de las utilidades transversales (sin red)."""
 from __future__ import annotations
 
+import logging
+import os
 import unittest
+from unittest import mock
 
 from src.utils import (
     json_dumps_canonical,
     parse_date,
     parse_float,
     parse_fundsquare_date_ddmmyyyy,
+    setup_logging,
 )
 
 
@@ -58,6 +62,23 @@ class JsonCanonicalTests(unittest.TestCase):
         texto = json_dumps_canonical({"b": 1, "a": "ñ"})
         self.assertLess(texto.index('"a"'), texto.index('"b"'))
         self.assertIn("ñ", texto)
+
+
+class SetupLoggingTests(unittest.TestCase):
+    def test_http_loggers_no_bajan_de_warning_ni_con_debug(self):
+        root = logging.getLogger()
+        niveles = {n: logging.getLogger(n).level for n in ("urllib3", "requests")}
+        self.addCleanup(lambda: [logging.getLogger(n).setLevel(v) for n, v in niveles.items()])
+        self.addCleanup(root.setLevel, root.level)
+
+        with mock.patch.dict(os.environ, {"LOGLEVEL": "DEBUG"}):
+            setup_logging()
+
+        # El escenario peligroso está activo: el log raíz sí es DEBUG...
+        self.assertEqual(root.level, logging.DEBUG)
+        # ...pero las librerías HTTP no llegan a registrar la URL de la petición.
+        self.assertEqual(logging.getLogger("urllib3").level, logging.WARNING)
+        self.assertEqual(logging.getLogger("requests").level, logging.WARNING)
 
 
 if __name__ == "__main__":

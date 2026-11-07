@@ -11,6 +11,10 @@ from typing import Any
 # Expresión regular simplificada y robusta para la fecha de Financial Times
 RE_FT_LONG_DATE = re.compile(r"([a-zA-Z]+,\s+[a-zA-Z]+\s+\d{1,2},\s+\d{4})")
 
+# Librerías HTTP que registran la URL completa (ruta y query) a nivel DEBUG.
+# En un repo público eso expondría el enlace del CSV, así que nunca bajamos de WARNING.
+QUIET_HTTP_LOGGERS = ("urllib3", "requests")
+
 def setup_logging() -> None:
     level = os.getenv("LOGLEVEL", "INFO").upper().strip()
     logging.basicConfig(
@@ -19,6 +23,8 @@ def setup_logging() -> None:
         datefmt="%Y-%m-%d %H:%M:%S",
         force=True,
     )
+    for name in QUIET_HTTP_LOGGERS:
+        logging.getLogger(name).setLevel(logging.WARNING)
 
 def utcnow_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
