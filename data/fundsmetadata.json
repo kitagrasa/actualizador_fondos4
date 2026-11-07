@@ -80,8 +80,8 @@
     },
     "LU1223083087": {
       "currency": "EUR",
-      "fundsquareurl": "https://www.fundsquare.net/security/histo-prices?idInstr=248012",
       "fturl": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU1223083087:EUR",
+      "fundsquareurl": "https://www.fundsquare.net/security/histo-prices?idInstr=248012",
       "name": "Schroder International Selection Fund Global Gold A Accumulation EUR Hedged"
     },
     "LU1372006947": {
@@ -95,15 +95,15 @@
     "LU1598719752": {
       "cobasurl": "https://www.cobasam.com/productos/cobas-lux-sicav/lux_international_eur/",
       "currency": "EUR",
-      "fundsquareurl": "https://www.fundsquare.net/security/histo-prices?idInstr=268050",
       "fturl": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU1598719752:EUR",
+      "fundsquareurl": "https://www.fundsquare.net/security/histo-prices?idInstr=268050",
       "name": "Cobas LUX SICAV - Cobas International Fund-P Acc EUR"
     },
     "LU1598720172": {
       "cobasurl": "https://www.cobasam.com/productos/cobas-lux-sicav/lux_large_cap_eur/",
       "currency": "EUR",
-      "fundsquareurl": "https://www.fundsquare.net/security/histo-prices?idInstr=268051",
       "fturl": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU1598720172:EUR",
+      "fundsquareurl": "https://www.fundsquare.net/security/histo-prices?idInstr=268051",
       "name": "Cobas LUX SICAV - Cobas Large Cap Fund-P Acc EUR"
     },
     "LU2145461757": {
