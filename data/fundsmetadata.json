@@ -41,7 +41,6 @@
       "arivaurl": "https://www.ariva.de/etf/amundi-global-hydrogen-ucits-etf-acc/kurse/historische-kurse?boerse_id=45",
       "currency": "EUR",
       "fturl": "https://markets.ft.com/data/etfs/tearsheet/historical?s=AMEE:GER:EUR",
-      "investing_url": "https://es.investing.com/etfs/amundi-etf-msci-europe-energy-historical-data?cid=45955",
       "name": "Amundi Global Hydrogen UCITS ETF - Acc"
     },
     "IE0006TUI4G7": {
@@ -58,10 +57,7 @@
     },
     "LU0171306680": {
       "arivaurl": "https://www.ariva.de/fonds/blackrock-global-funds-world-gold-fund-e2-eur/kurse/historische-kurse",
-      "fundsquare_url": "https://www.fundsquare.net/security/histo-prices?idInstr=6401",
-      "fundsquareurl": "https://www.fundsquare.net/security/histo-prices?idInstr=6401",
-      "investing_pair_id": "1036800",
-      "investing_url": "https://es.investing.com/funds/world-gold-fund-e2e-historical-data"
+      "fundsquareurl": "https://www.fundsquare.net/security/histo-prices?idInstr=6401"
     },
     "LU0194438841": {
       "arivaurl": "https://www.ariva.de/fonds/bnp-paribas-funds-japan-small-cap-classic-h-eur-cap/kurse/historische-kurse",
@@ -84,12 +80,8 @@
     },
     "LU1223083087": {
       "currency": "EUR",
-      "ft_url": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU1223083087:EUR",
-      "fturl": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU1223083087:EUR",
-      "fundsquare_url": "https://www.fundsquare.net/security/histo-prices?idInstr=248012",
       "fundsquareurl": "https://www.fundsquare.net/security/histo-prices?idInstr=248012",
-      "investing_pair_id": "1107198",
-      "investing_url": "https://es.investing.com/funds/schroder-intlslct-glblgold-a-acceur-historical-data",
+      "fturl": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU1223083087:EUR",
       "name": "Schroder International Selection Fund Global Gold A Accumulation EUR Hedged"
     },
     "LU1372006947": {
@@ -103,23 +95,15 @@
     "LU1598719752": {
       "cobasurl": "https://www.cobasam.com/productos/cobas-lux-sicav/lux_international_eur/",
       "currency": "EUR",
-      "ft_url": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU1598719752:EUR",
-      "fturl": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU1598719752:EUR",
-      "fundsquare_url": "https://www.fundsquare.net/security/histo-prices?idInstr=268050",
       "fundsquareurl": "https://www.fundsquare.net/security/histo-prices?idInstr=268050",
-      "investing_pair_id": "1177605",
-      "investing_url": "https://es.investing.com/funds/lu1598719752-historical-data",
+      "fturl": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU1598719752:EUR",
       "name": "Cobas LUX SICAV - Cobas International Fund-P Acc EUR"
     },
     "LU1598720172": {
       "cobasurl": "https://www.cobasam.com/productos/cobas-lux-sicav/lux_large_cap_eur/",
       "currency": "EUR",
-      "ft_url": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU1598720172:EUR",
-      "fturl": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU1598720172:EUR",
-      "fundsquare_url": "https://www.fundsquare.net/security/histo-prices?idInstr=268051",
       "fundsquareurl": "https://www.fundsquare.net/security/histo-prices?idInstr=268051",
-      "investing_pair_id": "1177606",
-      "investing_url": "https://es.investing.com/funds/lu1598720172-historical-data",
+      "fturl": "https://markets.ft.com/data/funds/tearsheet/historical?s=LU1598720172:EUR",
       "name": "Cobas LUX SICAV - Cobas Large Cap Fund-P Acc EUR"
     },
     "LU2145461757": {

@@ -15,7 +15,7 @@ from typing import Dict, List, Optional
 
 from .config import load_funds_csv
 from .http_client import build_session
-from .portfolio import read_prices_json, write_prices_json_if_changed
+from .portfolio import read_prices, write_prices_if_changed
 from .utils import setup_logging, json_dumps_canonical
 from .scrapers.ft_scraper import scrape_ft_prices
 from .scrapers.fundsquare_scraper import scrape_fundsquare_prices
@@ -29,7 +29,16 @@ DATA_DIR = ROOT / "data"
 PRICES_DIR = DATA_DIR / "prices"
 META_FILE = DATA_DIR / "fundsmetadata.json"
 
+# Salvaguarda anti-borrado masivo: si un run conserva menos de esta proporción de
+# los históricos existentes, se interpreta como carga parcial del CSV y se aborta
+# sin borrar nada (la variable ALLOW_MASS_DELETE=1 fuerza la limpieza).
+CLEANUP_MIN_KEEP_RATIO = 0.8
+
 log = logging.getLogger("app")
+
+
+class CleanupAborted(RuntimeError):
+    """La limpieza se abortó porque el CSV parece haberse cargado a medias."""
 
 
 def load_metadata() -> Dict:
@@ -59,20 +68,45 @@ def save_metadata_if_changed(meta: Dict) -> bool:
     return True
 
 
-def cleanup_removed_funds(active_isins: List[str], meta: Dict) -> bool:
-    """Borra archivos JSON y metadatos de ISINs que ya no están en el CSV."""
-    changed = False
+def cleanup_removed_funds(active_isins: List[str], meta: Dict, allow_mass_delete: bool = False) -> bool:
+    """
+    Borra las tablas HTML y metadatos de ISINs que ya no están en el CSV.
+
+    Salvaguarda: si sobrevive menos del CLEANUP_MIN_KEEP_RATIO de los históricos
+    existentes, se lanza CleanupAborted y no se borra nada, para no destruir datos
+    por una carga parcial de la hoja. `allow_mass_delete` (ALLOW_MASS_DELETE=1)
+    permite forzar una reducción real de la cartera.
+    """
     active_set = set(active_isins)
     PRICES_DIR.mkdir(parents=True, exist_ok=True)
-    for p in PRICES_DIR.glob("*.json"):
-        isin = p.stem.strip()
-        if isin and isin not in active_set:
-            log.info("Eliminando histórico de fondo eliminado: %s", isin)
-            try:
-                p.unlink()
-                changed = True
-            except Exception as e:
-                log.error("No se pudo borrar %s: %s", p, e)
+
+    existing = sorted(
+        p.name.strip()
+        for p in PRICES_DIR.iterdir()
+        if p.is_file() and p.name.strip() and not p.name.startswith(".")
+    )
+    removed_files = [isin for isin in existing if isin not in active_set]
+
+    if removed_files and not allow_mass_delete:
+        kept_ratio = (len(existing) - len(removed_files)) / len(existing)
+        if kept_ratio < CLEANUP_MIN_KEEP_RATIO:
+            raise CleanupAborted(
+                "Solo sobrevivirían %d de %d históricos (%.0f %%) y el umbral de "
+                "seguridad es %.0f %%. Posible carga parcial del CSV: no se borra nada. "
+                "Si la reducción es intencionada, define ALLOW_MASS_DELETE=1."
+                % (len(existing) - len(removed_files), len(existing),
+                   kept_ratio * 100, CLEANUP_MIN_KEEP_RATIO * 100)
+            )
+
+    changed = False
+    for isin in removed_files:
+        log.info("Eliminando histórico de fondo eliminado: %s", isin)
+        try:
+            (PRICES_DIR / isin).unlink()
+            changed = True
+        except Exception as e:
+            log.error("No se pudo borrar el histórico de %s: %s", isin, e)
+
     funds_meta = meta.get("funds", {})
     for isin in list(funds_meta.keys()):
         if isin not in active_set:
@@ -134,8 +168,13 @@ def main() -> int:
     meta = load_metadata()
     any_changed = False
 
-    if cleanup_removed_funds([f.isin for f in funds], meta):
-        any_changed = True
+    allow_mass_delete = os.getenv("ALLOW_MASS_DELETE", "0").strip() == "1"
+    try:
+        if cleanup_removed_funds([f.isin for f in funds], meta, allow_mass_delete):
+            any_changed = True
+    except CleanupAborted as e:
+        log.error("CRÍTICO: %s", e)
+        return 1
 
     full_refresh = os.getenv("FULL_REFRESH", "0").strip() == "1"
     lookback_days = int(os.getenv("LOOKBACK_DAYS", "14"))
@@ -167,8 +206,8 @@ def main() -> int:
             gen2_url or "—",
         )
 
-        existing_path = PRICES_DIR / f"{isin}.json"
-        existing = read_prices_json(existing_path)
+        existing_path = PRICES_DIR / isin
+        existing = read_prices(existing_path)
         last_date = max_existing_date(existing)
 
         do_full = full_refresh or not existing
@@ -256,7 +295,7 @@ def main() -> int:
             cobas_prices,
         )
 
-        if write_prices_json_if_changed(existing_path, merged):
+        if write_prices_if_changed(existing_path, merged):
             log.info("Actualizado %s: %s puntos", isin, len(merged))
             any_changed = True
         else:

@@ -17,10 +17,22 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional
+from urllib.parse import urlparse
 
 import requests
 
 log = logging.getLogger(__name__)
+
+
+def _redact_url(url: str) -> str:
+    """
+    Devuelve solo esquema y host de una URL. La URL del CSV es un secreto: su
+    ruta y parámetros no deben acabar en los logs del workflow (repo público).
+    """
+    parsed = urlparse(str(url))
+    if parsed.scheme and parsed.netloc:
+        return f"{parsed.scheme}://{parsed.netloc}"
+    return "origen remoto"
 
 
 def _normalize_field_names(fieldnames: List[str]) -> List[str]:
@@ -47,7 +59,6 @@ class FundConfig:
     isin: str
     fturl: str               # Financial Times
     fundsquareurl: str       # Fundsquare
-    investingurl: str        # Investing.com (no activo)
     arivaurl: str            # Ariva
     yahoourl: str            # Yahoo Finance
     cobasurl: str            # Cobas AM
@@ -81,7 +92,12 @@ def load_funds_csv(path_or_url: str | Path) -> List[FundConfig]:
             content = resp.text
             log.info("CSV remoto descargado: %d caracteres", len(content))
         except Exception as e:
-            log.error("Error descargando CSV desde %s: %s", path_str, e)
+            log.error(
+                "Error descargando el CSV desde %s (%s). "
+                "La URL completa no se registra por seguridad.",
+                _redact_url(path_str),
+                type(e).__name__,
+            )
             return []
     else:
         path = Path(path_or_url)
@@ -139,7 +155,6 @@ def load_funds_csv(path_or_url: str | Path) -> List[FundConfig]:
                 isin=isin,
                 fturl=_get_column_value(row, "ft_url", "fturl"),
                 fundsquareurl=_get_column_value(row, "fundsquare_url", "fundsquareurl"),
-                investingurl=_get_column_value(row, "investing_url", "investingurl"),
                 arivaurl=_get_column_value(row, "ariva_url", "arivaurl"),
                 yahoourl=_get_column_value(row, "yahoo_url", "yahoourl"),
                 cobasurl=_get_column_value(row, "cobas_url", "cobasurl"),

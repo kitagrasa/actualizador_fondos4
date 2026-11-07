@@ -1,8 +1,8 @@
-requests>=2.31.0
-urllib3>=2.0.0
-beautifulsoup4>=4.12.0
-lxml>=4.9.0
-curl_cffi>=0.7.0
+requests==2.34.2
+urllib3==2.8.0
+beautifulsoup4==4.15.0
+lxml==6.1.3
+curl_cffi==0.17.0
 # playwright es OPCIONAL — solo para webs con JavaScript crítico
 # Para activarlo: pip install playwright && playwright install chromium
-# playwright>=1.40.0
+# (no se instala en GitHub Actions)
